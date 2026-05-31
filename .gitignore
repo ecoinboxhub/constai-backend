@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.venv/
+venv/
+env/
+.virtualenv/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+secrets/
+
+# Data/model artifacts
+data/raw/
+data/processed/
+artifacts/
+mlruns/
+
+# IDE/system
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and reports
+*.log
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+*.json
+*.key
+credentials.json
+service-account.json
+backend/tests/.env
+
+.env
+.env.*
+!.env.example
+
+backend/.env
+backend/.env*
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Cryptographic keys and certs
+*.pem
+*.p12
+*.p8
+*.pfx
+*.crt
+

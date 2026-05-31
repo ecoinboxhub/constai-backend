@@ -1,0 +1,45 @@
+# Core Backend Dependencies
+fastapi
+uvicorn[standard]
+pydantic
+pydantic[email]
+pydantic-settings
+sqlalchemy
+psycopg2-binary
+alembic
+passlib[bcrypt]
+python-multipart
+httpx
+python-jose
+pyasn1
+cffi
+redis
+celery[redis]
+
+# Machine Learning & Data Science Dependencies
+beautifulsoup4
+pandas
+numpy<2
+scikit-learn
+torch
+sentence-transformers
+transformers
+datasets
+
+# LLM & RAG Dependencies
+langchain
+langchain-core
+langchain-openai
+langchain-community
+langchain-chroma
+langchain-ollama
+langchain-text-splitters
+chromadb
+
+# Document Processing
+PyPDF2
+python-docx
+
+# Development, Testing & DevOps Tools
+pytest
+ruff

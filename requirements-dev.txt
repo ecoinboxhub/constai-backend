@@ -1,0 +1,5 @@
+# Development, Testing & DevOps Tools
+pytest==8.3.3
+ruff==0.6.9
+selenium==4.21.0
+webdriver-manager==4.0.1
