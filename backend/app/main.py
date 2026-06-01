@@ -2,6 +2,8 @@ import logging
 import traceback
 import sys
 import os
+import psutil
+import gc
 from contextlib import asynccontextmanager
 
 # Ensure the repository's `backend` directory is on sys.path so `app` is importable
@@ -21,18 +23,37 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 configure_logging()
 logger = logging.getLogger(__name__)
 
+# Global flags to track initialization
+_db_initialized = False
+_db_init_attempted = False
+
+
+def log_startup_diagnostics(stage: str):
+    """Log memory usage and current state during startup."""
+    try:
+        process = psutil.Process()
+        mem = process.memory_info()
+        percent = process.memory_percent()
+        logger.info(f"[STARTUP] {stage} | Memory: {mem.rss / 1024 / 1024:.1f}MB ({percent:.1f}%)")
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize database engine first, then migrate/seed
-    from app.db.session import init_db_engine, init_db
-    try:
-        init_db_engine()  # Create engine and SessionLocal
-        init_db()         # Create tables and seed data
-        logger.info("Database initialized successfully.")
-    except Exception as exc:
-        logger.warning(f"Database initialization skipped or failed: {exc}")
+    """FastAPI lifespan context manager with optimized startup."""
+    log_startup_diagnostics("STARTUP_BEGIN")
     
-    # AI Provider Validation
+    # Startup phase
+    try:
+        # Defer database initialization - do NOT block on startup
+        # Database will be initialized lazily on first request
+        logger.info("Database initialization deferred to first request for faster startup")
+        log_startup_diagnostics("STARTUP_DEFERRED_DB")
+    except Exception as exc:
+        logger.warning(f"Startup warning: {exc}")
+    
+    # AI Provider Validation (non-blocking check)
     providers = []
     if settings.gemini_api_key and settings.gemini_api_key != "change-me":
         providers.append(f"Gemini ({settings.gemini_default_model})")
@@ -41,13 +62,40 @@ async def lifespan(app: FastAPI):
     
     if providers:
         logger.info(f"AI Strategy Service initializing with: {', '.join(providers)}")
-        # Simple non-blocking connectivity check could be added here if needed
     else:
         logger.critical("AI Strategy Service: No LLM providers configured! Strategy features will fail.")
     
+    log_startup_diagnostics("STARTUP_COMPLETE")
+    logger.info("✅ FastAPI application ready to accept requests")
+    
     yield
-    # Shutdown
+    
+    # Shutdown phase
     logger.info("Application shutting down...")
+    gc.collect()
+    log_startup_diagnostics("SHUTDOWN_COMPLETE")
+
+
+def ensure_db_initialized():
+    """Initialize database on first request if not already done."""
+    global _db_initialized, _db_init_attempted
+    
+    if _db_initialized or _db_init_attempted:
+        return
+    
+    _db_init_attempted = True
+    try:
+        from app.db.session import init_db_engine, init_db
+        log_startup_diagnostics("DB_INIT_START")
+        init_db_engine()
+        init_db()
+        _db_initialized = True
+        log_startup_diagnostics("DB_INIT_COMPLETE")
+        logger.info("Database initialized successfully.")
+    except Exception as exc:
+        logger.warning(f"Database initialization failed: {exc}")
+        logger.info("Application will continue without database persistence.")
+
 
 app = FastAPI(
     title=settings.app_name, 
@@ -58,7 +106,6 @@ app = FastAPI(
 # CORS Configuration
 origins = [
     "http://localhost:3000",
-
     "http://localhost:5173",
 ]
 if settings.production_domain:
@@ -98,11 +145,31 @@ async def global_exception_handler(request: Request, exc: Exception):
         detail = f"{str(exc)}\n{traceback.format_exc()}"
     return JSONResponse(status_code=500, content={"detail": detail})
 
+# Include API router with lazy DB initialization
+@app.middleware("http")
+async def lazy_db_init_middleware(request: Request, call_next):
+    """Ensure database is initialized before processing requests."""
+    ensure_db_initialized()
+    response = await call_next(request)
+    return response
+
 app.include_router(api_router, prefix=settings.api_prefix)
 
+@app.get("/")
 @app.get("/health")
-def root_health():
-    return {"status": "ok"}
+def health_check():
+    """Simple health check that responds immediately without waiting for DB."""
+    try:
+        import psutil
+        process = psutil.Process()
+        mem_mb = process.memory_info().rss / 1024 / 1024
+        return {
+            "status": "ok",
+            "memory_mb": round(mem_mb, 2),
+            "db_initialized": _db_initialized
+        }
+    except Exception:
+        return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
@@ -111,5 +178,6 @@ if __name__ == "__main__":
         "app.main:app",
         host="0.0.0.0",
         port=port,
+        workers=1,  # Single worker for memory efficiency
         reload=getattr(settings, "debug", False),
     )

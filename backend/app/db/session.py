@@ -68,63 +68,83 @@ def get_db() -> Generator:
 def init_db() -> None:
     """
     Initialize the database by creating all tables and seeding initial data.
-    Must be called after init_db_engine() during FastAPI startup.
+    Must be called after init_db_engine() during startup (lazy loaded on first request).
+    
+    Runs with timeouts to prevent blocking on slow or offline databases.
     """
-    from sqlalchemy import inspect
+    import logging
+    logger = logging.getLogger(__name__)
     
-    from app.db.models import core  # noqa: F401
-    
-    engine = get_engine()
-    SessionLocal = get_session_factory()
-    
-    Base.metadata.create_all(bind=engine)
-    
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-    print(f"Database initialized. Tables found: {', '.join(tables)}")
-
-    db = SessionLocal()
     try:
-        if db.query(core.Company).count() == 0:
-            print("Seeding default company...")
-            company = core.Company(name="ConstAI Default", industry="Construction", country="Nigeria")
-            db.add(company)
-            db.commit()
-            db.refresh(company)
-            default_company_id = company.id
-        else:
-            default_company_id = db.query(core.Company).first().id
-
-        if db.query(core.Material).count() == 0:
-            print("Seeding initial material data...")
-            materials = [
-                core.Material(name="Cement", category="Building Materials", unit="50kg Bag"),
-                core.Material(name="Steel Rebars", category="Building Materials", unit="Ton"),
-                core.Material(name="Sand", category="Aggregates", unit="Trip"),
-                core.Material(name="Granite", category="Aggregates", unit="Trip"),
-            ]
-            db.add_all(materials)
-            db.commit()
-            
-            for m in materials:
-                pp = core.PricePoint(
-                    material_id=m.id,
-                    source_name="Market Standard",
-                    price=12500.0 if m.name == "Cement" else 980000.0 if m.name == "Steel Rebars" else 45000.0,
-                    source_url="internal://market-node"
-                )
-                db.add(pp)
-            db.commit()
-            print("Seeding complete.")
+        from sqlalchemy import inspect, event, pool
+        from sqlalchemy.exc import OperationalError
+        from app.db.models import core  # noqa: F401
         
-        # Only seed projects if none exist (idempotent seeding)
-        if db.query(core.Project).count() == 0:
-            print("Seeding initial project data...")
-            from app.db.seeds import seed_erp_data
-            seed_erp_data(company_id=default_company_id)
-            print("Project seeding complete.")
-    finally:
-        db.close()
+        engine = get_engine()
+        
+        # Set connection timeout to 5 seconds
+        @event.listens_for(pool.Pool, "connect")
+        def receive_connect(dbapi_conn, connection_record):
+            if hasattr(dbapi_conn, 'timeout'):
+                dbapi_conn.timeout = 5.0
+        
+        try:
+            # Try to create tables with timeout
+            Base.metadata.create_all(bind=engine, checkfirst=True)
+            
+            inspector = inspect(engine)
+            tables = inspector.get_table_names()
+            logger.info(f"Database initialized. Tables: {', '.join(tables)}")
+        except OperationalError as e:
+            logger.warning(f"Database connection failed: {e}. App will continue without persistence.")
+            return
+        
+        SessionLocal = get_session_factory()
+        db = SessionLocal()
+        try:
+            # Seed default data idempotently
+            if db.query(core.Company).count() == 0:
+                logger.info("Seeding default company...")
+                company = core.Company(name="ConstAI Default", industry="Construction", country="Nigeria")
+                db.add(company)
+                db.commit()
+                db.refresh(company)
+                default_company_id = company.id
+            else:
+                default_company_id = db.query(core.Company).first().id
+
+            if db.query(core.Material).count() == 0:
+                logger.info("Seeding initial material data...")
+                materials = [
+                    core.Material(name="Cement", category="Building Materials", unit="50kg Bag"),
+                    core.Material(name="Steel Rebars", category="Building Materials", unit="Ton"),
+                    core.Material(name="Sand", category="Aggregates", unit="Trip"),
+                    core.Material(name="Granite", category="Aggregates", unit="Trip"),
+                ]
+                db.add_all(materials)
+                db.commit()
+                
+                for m in materials:
+                    pp = core.PricePoint(
+                        material_id=m.id,
+                        source_name="Market Standard",
+                        price=12500.0 if m.name == "Cement" else 980000.0 if m.name == "Steel Rebars" else 45000.0,
+                        source_url="internal://market-node"
+                    )
+                    db.add(pp)
+                db.commit()
+                logger.info("Material seeding complete.")
+            
+            # Only seed projects if none exist
+            if db.query(core.Project).count() == 0:
+                logger.info("Seeding initial project data...")
+                from app.db.seeds import seed_erp_data
+                seed_erp_data(company_id=default_company_id)
+                logger.info("Project seeding complete.")
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning(f"Database initialization error: {exc}. App will continue without persistence.")
 
 
 # Provide backward-compatible module-level attributes for old-style imports

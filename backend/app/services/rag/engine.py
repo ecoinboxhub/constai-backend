@@ -4,25 +4,42 @@ import logging
 from pathlib import Path
 from typing import Any
 
-# Disable telemetry
+# Disable telemetry BEFORE any imports
 os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
-# Vector DB
-import chromadb
-from chromadb.config import Settings as ChromaClientSettings
-from langchain_chroma import Chroma
-
-# LLM (safe import for optional integrations)
-try:
-    from langchain_ollama import OllamaLLM
-except Exception:
-    OllamaLLM = None
+# Silence telemetry logs early
+logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 from app.core.config import settings
 
-# Silence telemetry logs
-logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
+# Lazy-loaded globals (not loaded until actually used)
+_chromadb = None
+_Chroma = None
+_OllamaLLM = None
+_CHROMA_CLIENTS: dict[str, Any] = {}
+
+def _lazy_import_chromadb():
+    """Lazy load chromadb only when needed."""
+    global _chromadb, _Chroma
+    if _chromadb is None:
+        import chromadb
+        from chromadb.config import Settings as ChromaClientSettings
+        from langchain_chroma import Chroma
+        _chromadb = chromadb
+        _Chroma = Chroma
+    return _chromadb, _Chroma
+
+def _lazy_import_ollama():
+    """Lazy load OllamaLLM only when needed."""
+    global _OllamaLLM
+    if _OllamaLLM is None:
+        try:
+            from langchain_ollama import OllamaLLM
+            _OllamaLLM = OllamaLLM
+        except Exception:
+            _OllamaLLM = False  # Mark as tried but failed
+    return _OllamaLLM if _OllamaLLM is not False else None
 
 # Updated to ChatPromptTemplate (required for v1 chains)
 PROMPT_TEMPLATE = """Answer the question based only on the following context:
@@ -36,17 +53,14 @@ Analyze for safety hazards and risks.
 
 Question: {input}"""
 
-# Cache Chroma clients
-_CHROMA_CLIENTS: dict[str, chromadb.ClientAPI] = {}
-
-# Text splitter will be imported lazily inside functions to avoid import-time
-# failures when langchain-related packages are not installed in the environment.
+# Text splitter will be imported lazily inside functions
 
 
 # -----------------------------
 # Embedding model
 # -----------------------------
 def _embedding_model():
+    """Get embedding model, preferring OpenAI if available, falling back to HuggingFace."""
     # Import embedding implementations lazily to avoid import-time failures
     try:
         from langchain_openai import OpenAIEmbeddings
@@ -66,14 +80,29 @@ def _embedding_model():
 
     raise RuntimeError("No embedding backend available: install langchain_openai or langchain_community.embeddings")
 
+# Cache embedding model
+_embedding_cache = None
+
+def get_embedding_model():
+    """Get cached embedding model."""
+    global _embedding_cache
+    if _embedding_cache is None:
+        _embedding_cache = _embedding_model()
+    return _embedding_cache
+
 # -----------------------------
 # Vector store
 # -----------------------------
-def get_vectorstore(persist_dir: str, collection_name: str = "const_ai_knowledge") -> Chroma:
+def get_vectorstore(persist_dir: str, collection_name: str = "const_ai_knowledge") -> Any:
+    """Get Chroma vector store with lazy chromadb initialization."""
+    chromadb_module, Chroma = _lazy_import_chromadb()
+    ChromaClientSettings = chromadb_module.config.Settings
+    
     resolved_dir = str(Path(persist_dir).resolve())
     client = _CHROMA_CLIENTS.get(resolved_dir)
+    
     if client is None:
-        client = chromadb.PersistentClient(
+        client = chromadb_module.PersistentClient(
             path=resolved_dir,
             settings=ChromaClientSettings(anonymized_telemetry=False),
         )
@@ -81,12 +110,13 @@ def get_vectorstore(persist_dir: str, collection_name: str = "const_ai_knowledge
 
     return Chroma(
         collection_name=collection_name,
-        embedding_function=_embedding_model(),
+        embedding_function=get_embedding_model(),
         persist_directory=resolved_dir,
         client=client,
     )
 
 def chunk_document(text: str, chunk_size: int = 1000, overlap: int = 100) -> list[str]:
+    """Split document into chunks. Lazy import to avoid startup overhead."""
     try:
         from langchain_text_splitters import RecursiveCharacterTextSplitter
     except Exception:
@@ -109,6 +139,7 @@ async def query_project_knowledge(
     persist_dir: str,
     k: int = 4
 ) -> dict[str, Any]:
+    """Query vector store for project-specific knowledge with lazy initialization."""
     vectorstore = get_vectorstore(persist_dir)
     
     # Isolation via metadata filtering

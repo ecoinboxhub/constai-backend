@@ -25,7 +25,6 @@ googleapis-common-protos
 greenlet
 grpcio
 grpcio-status
-gunicorn
 h11
 httpcore
 httptools
@@ -48,6 +47,7 @@ packaging
 passlib
 proto-plus
 protobuf
+psutil
 psycopg2-binary>=2.9.9
 pyasn1
 pyasn1-modules
