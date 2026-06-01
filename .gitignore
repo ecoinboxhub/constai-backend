@@ -65,3 +65,4 @@ backend/.env*
 *.pfx
 *.crt
 
+dep/

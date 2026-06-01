@@ -8,27 +8,15 @@ from typing import Any
 os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
-# ✅ LangChain v0.2+ imports for chains
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
-
 # Vector DB
 import chromadb
 from chromadb.config import Settings as ChromaClientSettings
 from langchain_chroma import Chroma
 
-# Document loaders
-from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
-
-# Embeddings
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_openai import OpenAIEmbeddings
-
-# LLM (UPDATED SAFE IMPORT)
+# LLM (safe import for optional integrations)
 try:
     from langchain_ollama import OllamaLLM
-except ImportError:
+except Exception:
     OllamaLLM = None
 
 from app.core.config import settings
@@ -51,15 +39,32 @@ Question: {input}"""
 # Cache Chroma clients
 _CHROMA_CLIENTS: dict[str, chromadb.ClientAPI] = {}
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+# Text splitter will be imported lazily inside functions to avoid import-time
+# failures when langchain-related packages are not installed in the environment.
+
 
 # -----------------------------
 # Embedding model
 # -----------------------------
 def _embedding_model():
-    if settings.openai_api_key:
+    # Import embedding implementations lazily to avoid import-time failures
+    try:
+        from langchain_openai import OpenAIEmbeddings
+    except Exception:
+        OpenAIEmbeddings = None
+
+    try:
+        from langchain_community.embeddings import HuggingFaceEmbeddings
+    except Exception:
+        HuggingFaceEmbeddings = None
+
+    if settings.openai_api_key and OpenAIEmbeddings is not None:
         return OpenAIEmbeddings(api_key=settings.openai_api_key)
-    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+    if HuggingFaceEmbeddings is not None:
+        return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+    raise RuntimeError("No embedding backend available: install langchain_openai or langchain_community.embeddings")
 
 # -----------------------------
 # Vector store
@@ -82,8 +87,13 @@ def get_vectorstore(persist_dir: str, collection_name: str = "const_ai_knowledge
     )
 
 def chunk_document(text: str, chunk_size: int = 1000, overlap: int = 100) -> list[str]:
+    try:
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+    except Exception:
+        raise RuntimeError("langchain_text_splitters is required for document chunking")
+
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size, 
+        chunk_size=chunk_size,
         chunk_overlap=overlap,
         separators=["\n\n", "\n", ".", " ", ""]
     )
