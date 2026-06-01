@@ -2,7 +2,7 @@ services:
   - type: web
     name: constai-backend
     env: python
-    build_command: pip install -U pip && pip install -r requirements-prod.txt
+    build_command: pip install -U pip && pip install -r requirements.txt
     start_command: gunicorn -w 2 -k uvicorn.workers.UvicornWorker app.main:app --chdir backend --bind 0.0.0.0:$PORT
     root: .
     plan: free
