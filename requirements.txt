@@ -60,6 +60,7 @@ python-dotenv
 python-jose
 python-multipart
 PyYAML
+redis
 requests
 rsa
 sentence-transformers
