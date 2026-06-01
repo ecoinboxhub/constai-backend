@@ -58,8 +58,6 @@ def get_redis() -> RedisService:
     return _redis_instance
 
 
-# For backwards compatibility, provide a default instance accessor
-# (Note: this should NOT be used at import time)
-@property
-def redis_cache():
-    return get_redis()
+# Export get_redis for use in other modules
+# Never import redis_cache directly at module level!
+redis_cache = None  # Will be set on first use

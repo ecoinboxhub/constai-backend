@@ -39,10 +39,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from PyPDF2 import PdfReader
 import docx
 from app.services.weather import get_live_weather
-from app.services.redis_service import redis_cache
 from app.modules.project_tracker.tasks import fetch_weather_data, process_project_document
 
 logger = logging.getLogger(__name__)
+
+def _get_redis():
+    """Lazy load redis on first use."""
+    from app.services.redis_service import get_redis
+    return get_redis()
 
 @contextmanager
 def get_session():
@@ -160,7 +164,7 @@ def update_project(project_id: int, company_id: int, payload: ProjectUpdate) -> 
             session.commit()
             session.refresh(project)
             # Invalidate cache
-            redis_cache.delete(f"metrics:company:{company_id}")
+            _get_redis().delete(f"metrics:company:{company_id}")
             return _project_to_response(project)
         except SQLAlchemyError as exc:
             logger.error(f"Failed to update project: {exc}")
@@ -173,12 +177,12 @@ def delete_project(project_id: int, company_id: int) -> None:
             raise HTTPException(status_code=404, detail="Project not found")
         session.delete(project)
         session.commit()
-        redis_cache.delete(f"metrics:company:{company_id}")
+        _get_redis().delete(f"metrics:company:{company_id}")
 
 def get_dashboard_metrics(company_id: int) -> DashboardMetricsResponse:
     logger.info(f"Fetching dashboard metrics for company {company_id}")
     cache_key = f"metrics:company:{company_id}"
-    cached = redis_cache.get(cache_key)
+    cached = _get_redis().get(cache_key)
     if cached:
         logger.info(f"Returning cached metrics for company {company_id}")
         return DashboardMetricsResponse(**cached)
@@ -227,13 +231,13 @@ def get_dashboard_metrics(company_id: int) -> DashboardMetricsResponse:
             productivity_index=round(productivity_index, 2),
         )
         logger.info(f"Computed fresh metrics for company {company_id}: {res}")
-        redis_cache.set(cache_key, res.model_dump(), expire=300) # Cache for 5 mins
+        _get_redis().set(cache_key, res.model_dump(), expire=300) # Cache for 5 mins
         return res
 
 def get_weather_for_city(city: str) -> WeatherResponse:
     logger.info(f"Weather request for city: {city}")
     cache_key = f"weather:{city.lower()}"
-    cached = redis_cache.get(cache_key)
+    cached = _get_redis().get(cache_key)
     
     if cached:
         logger.info(f"Returning cached weather for {city}")

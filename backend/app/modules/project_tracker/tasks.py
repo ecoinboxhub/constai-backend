@@ -1,6 +1,5 @@
 import logging
 from app.core.celery_app import celery_app
-from app.services.redis_service import redis_cache
 import httpx
 import time
 
@@ -10,6 +9,10 @@ from app.services.weather import get_live_weather
 
 @celery_app.task(name="fetch_weather_data")
 def fetch_weather_data(city: str):
+    # Lazy import redis_cache only when task runs
+    from app.services.redis_service import get_redis
+    redis_cache = get_redis()
+    
     cache_key = f"weather:{city.lower()}"
     
     # Check cache first
