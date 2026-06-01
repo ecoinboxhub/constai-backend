@@ -48,6 +48,7 @@ packaging
 passlib
 proto-plus
 protobuf
+psycopg2-binary>=2.9.9
 pyasn1
 pyasn1-modules
 pycparser

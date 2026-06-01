@@ -23,13 +23,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    from app.db.session import init_db
+    # Startup: Initialize database engine first, then migrate/seed
+    from app.db.session import init_db_engine, init_db
     try:
-        init_db()
+        init_db_engine()  # Create engine and SessionLocal
+        init_db()         # Create tables and seed data
         logger.info("Database initialized successfully.")
     except Exception as exc:
         logger.warning(f"Database initialization skipped or failed: {exc}")
+    
     # AI Provider Validation
     providers = []
     if settings.gemini_api_key and settings.gemini_api_key != "change-me":

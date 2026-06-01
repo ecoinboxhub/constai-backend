@@ -5,11 +5,16 @@ import logging
 import time
 from typing import Any, Callable
 
-from app.services.redis_service import redis_cache
-
 logger = logging.getLogger(__name__)
 
 import asyncio
+
+
+def get_redis_cache():
+    """Lazy-load redis cache to avoid import-time connection attempts."""
+    from app.services.redis_service import get_redis
+    return get_redis()
+
 
 def ai_cache(expire: int = 86400):
     """
@@ -21,6 +26,7 @@ def ai_cache(expire: int = 86400):
         if asyncio.iscoroutinefunction(func):
             @functools.wraps(func)
             async def async_wrapper(prompt: str, *args, **kwargs):
+                redis_cache = get_redis_cache()
                 cache_input = f"{func.__name__}:{prompt}:{json.dumps(kwargs, sort_keys=True)}"
                 cache_key = f"ai_cache:{hashlib.md5(cache_input.encode()).hexdigest()}"
                 
@@ -42,6 +48,7 @@ def ai_cache(expire: int = 86400):
         else:
             @functools.wraps(func)
             def sync_wrapper(prompt: str, *args, **kwargs):
+                redis_cache = get_redis_cache()
                 cache_input = f"{func.__name__}:{prompt}:{json.dumps(kwargs, sort_keys=True)}"
                 cache_key = f"ai_cache:{hashlib.md5(cache_input.encode()).hexdigest()}"
                 

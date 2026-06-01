@@ -7,11 +7,16 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Global singleton cache instance
+_redis_instance = None
+
+
 class RedisService:
     def __init__(self):
         try:
             self.redis = redis.from_url(settings.redis_url, decode_responses=True)
             self.redis.ping()
+            logger.info("Redis connection established.")
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             self.redis = None
@@ -44,4 +49,17 @@ class RedisService:
             return False
         return self.redis.exists(key) > 0
 
-redis_cache = RedisService()
+
+def get_redis() -> RedisService:
+    """Lazy-load Redis singleton. Initialize only when first called."""
+    global _redis_instance
+    if _redis_instance is None:
+        _redis_instance = RedisService()
+    return _redis_instance
+
+
+# For backwards compatibility, provide a default instance accessor
+# (Note: this should NOT be used at import time)
+@property
+def redis_cache():
+    return get_redis()
