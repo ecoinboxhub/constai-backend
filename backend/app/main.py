@@ -180,12 +180,45 @@ def health_check():
         process = psutil.Process()
         mem_mb = process.memory_info().rss / 1024 / 1024
         return {
-            "status": "ok",
-            "memory_mb": round(mem_mb, 2),
-            "db_initialized": _db_initialized
+                        {
+            "name": "ConstAI",
+            "tagline": "Building Africa's Future with Predictive Construction Intelligence",
+            "status": "operational",
+            "version": "0.1.0",
+            "region": "Nigeria & Africa",
+            "overview": "An enterprise-grade AI platform for predictive risk management, cost optimization, compliance automation, and operational excellence across the construction lifecycle.",
+            "key_outcomes": {
+                "reduce_delays": true,
+                "control_budget_overruns": true,
+                "improve_regulatory_compliance": true,
+                "enhance_site_productivity": true,
+                "centralize_project_intelligence": true
+            },
+            "modules": [
+                "Project Tracker",
+                "Delay Predictor",
+                "AI Copilot",
+                "Document Analyzer",
+                "Legal RAG Search",
+                "Weather Intelligence",
+                "Workforce Management",
+                "Site Logs",
+                "Analytics Dashboard",
+                "Notifications"
+            ],
+            "docs": "/docs",
+            "health": "/health",
+            "ready": "/ready"
+            }
         }
+    
     except Exception:
-        return {"status": "ok"}
+        return {"status": "Ok",
+                "Operational": True,
+                "Title": "Construction AI Platform",
+                "Tagline": "Building Africa's Future with Predictive Construction Intelligence",
+                "Version": "0.1.0"
+        }
 
 
 @app.get("/ready")
@@ -217,7 +250,7 @@ def diagnostics():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8008))
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

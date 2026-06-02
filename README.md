@@ -34,10 +34,10 @@ python -c "from app.db.session import init_db; init_db()"
 ```
 4. Run API:
 ```bash
-uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000
+uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8008
 ```
 5. Open docs:
-- `http://localhost:8000/docs`
+- `http://localhost:8008/docs`
 
 ## API Endpoints
 
@@ -56,13 +56,13 @@ uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 8000
 ## Auth Flow
 1. Register user:
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/register \
+curl -X POST http://localhost:8008/api/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"password123","role":"analyst"}'
 ```
 2. Login:
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
+curl -X POST http://localhost:8008/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"password123"}'
 ```

@@ -19,7 +19,7 @@ DVC for data versioning, MLflow for experiment tracking, bootstrap data generati
 Models are trained offline and deployed as REST endpoints. We use joblib for scikit-learn models. For production, we plan to use LiteLLM for LLM-based features.
 
 ### What's your API architecture?
-Single FastAPI gateway on port 8000 with 10 modules separated by URL paths. All endpoints require JWT authentication except health check.
+Single FastAPI gateway on port 8008 with 10 modules separated by URL paths. All endpoints require JWT authentication except health check.
 
 ### How do you handle rate limiting?
 SlowAPI with 100 requests per minute limit per IP. Configurable per endpoint.

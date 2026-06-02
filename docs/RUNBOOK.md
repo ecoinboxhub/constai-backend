@@ -29,19 +29,19 @@ python -m virtualenv .venv --app-data .\.virtualenv --no-periodic-update
 
 ## 5) Start API
 ```powershell
-.\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8008
 ```
 
 Swagger UI:
-- http://127.0.0.1:8000/docs
+- http://127.0.0.1:8008/docs
 
 ## 6) Quick API checks
 ```powershell
-Invoke-WebRequest -Uri 'http://127.0.0.1:8000/api/v1/health' -UseBasicParsing
+Invoke-WebRequest -Uri 'http://127.0.0.1:8008/api/v1/health' -UseBasicParsing
 
-$token = (Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/api/v1/integration/token' -Headers @{ 'X-API-Key'='change-me' } -ContentType 'application/json' -Body '{"username":"demo","role":"project_manager"}').access_token
+$token = (Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8008/api/v1/integration/token' -Headers @{ 'X-API-Key'='change-me' } -ContentType 'application/json' -Body '{"username":"demo","role":"project_manager"}').access_token
 
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/api/v1/project-tracker/predict-delay' -Headers @{ 'Authorization'="Bearer $token" } -ContentType 'application/json' -Body '{"rainfall_mm":55,"temperature_c":31,"wind_speed_kmh":22,"resource_availability":0.7,"workforce_attendance":0.78,"supply_delay_days":4}'
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8008/api/v1/project-tracker/predict-delay' -Headers @{ 'Authorization'="Bearer $token" } -ContentType 'application/json' -Body '{"rainfall_mm":55,"temperature_c":31,"wind_speed_kmh":22,"resource_availability":0.7,"workforce_attendance":0.78,"supply_delay_days":4}'
 ```
 
 ## 7) One-command full run
@@ -68,7 +68,7 @@ Per-endpoint payload files are in:
 Edit each payload file before running validation to test endpoint-specific request bodies.
 
 ## 9) Nginx + Ngrok (single API port model)
-Core API stays on port `8000` only.
+Core API stays on port `8008` only.
 
 Optional infrastructure ports:
 - `80` for Nginx reverse proxy to API

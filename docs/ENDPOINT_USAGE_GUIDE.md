@@ -7,13 +7,13 @@ This guide explains how to use all current API endpoints with:
 - Other clients (`httpie`, Python `requests`, JavaScript `fetch`)
 
 Base URL (local):
-- `http://127.0.0.1:8000`
+- `http://127.0.0.1:8008`
 
 API prefix:
 - `/api/v1`
 
 Full docs URL:
-- `http://127.0.0.1:8000/docs`
+- `http://127.0.0.1:8008/docs`
 
 Public utility endpoints (no auth):
 - `GET /api/v1/health`
@@ -26,13 +26,13 @@ Public utility endpoints (no auth):
 From project root:
 
 ```powershell
-.\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8008
 ```
 
 Health check:
 
 ```powershell
-curl http://127.0.0.1:8000/api/v1/health
+curl http://127.0.0.1:8008/api/v1/health
 ```
 
 Expected response:
@@ -109,7 +109,7 @@ Sample success response:
 
 ### 2.3 Swagger Authorize step-by-step
 
-1. Open `http://127.0.0.1:8000/docs`
+1. Open `http://127.0.0.1:8008/docs`
 2. Run `POST /api/v1/integration/token` first and copy `access_token`
 3. Click `Authorize` (top-right lock icon)
 4. Paste token in Bearer field:
@@ -504,7 +504,7 @@ Response:
 Set variables:
 
 ```powershell
-$BASE_URL = "http://127.0.0.1:8000"
+$BASE_URL = "http://127.0.0.1:8008"
 $API_KEY = "<your_api_key>"
 ```
 
@@ -543,7 +543,7 @@ Invoke-RestMethod -Method POST `
 ## 7. Postman Usage (Step-by-step)
 
 1. Create environment variables:
-- `base_url = http://127.0.0.1:8000`
+- `base_url = http://127.0.0.1:8008`
 - `api_key = <your_api_key>`
 - `access_token =`
 - `refresh_token =`
@@ -585,13 +585,13 @@ pm.environment.set("refresh_token", data.refresh_token);
 Get token:
 
 ```bash
-http POST :8000/api/v1/integration/token X-API-Key:<your_api_key> username=admin_user role=admin
+http POST :8008/api/v1/integration/token X-API-Key:<your_api_key> username=admin_user role=admin
 ```
 
 Protected endpoint:
 
 ```bash
-http POST :8000/api/v1/cost-estimator/estimate Authorization:"Bearer <access_token>" area_sqm:=1500 floors:=2 complexity_index:=1.1 labor_cost_index:=1.0 materials_cost_index:=1.2
+http POST :8008/api/v1/cost-estimator/estimate Authorization:"Bearer <access_token>" area_sqm:=1500 floors:=2 complexity_index:=1.1 labor_cost_index:=1.0 materials_cost_index:=1.2
 ```
 
 ### 7.2 Python requests
@@ -599,7 +599,7 @@ http POST :8000/api/v1/cost-estimator/estimate Authorization:"Bearer <access_tok
 ```python
 import requests
 
-base = "http://127.0.0.1:8000"
+base = "http://127.0.0.1:8008"
 api_key = "<your_api_key>"
 
 tok = requests.post(
@@ -620,7 +620,7 @@ print(res.status_code, res.json())
 ### 7.3 JavaScript fetch
 
 ```javascript
-const base = "http://127.0.0.1:8000";
+const base = "http://127.0.0.1:8008";
 const apiKey = "<your_api_key>";
 
 const tokRes = await fetch(`${base}/api/v1/integration/token`, {
@@ -638,7 +638,7 @@ console.log(await res.json());
 
 ## 9. Error Prevention Checklist
 
-1. Confirm API is running on `127.0.0.1:8000`.
+1. Confirm API is running on `127.0.0.1:8008`.
 2. Use correct `.env` `API_KEY`.
 3. Always call `/integration/token` first.
 4. Pass Bearer token on protected endpoints.
