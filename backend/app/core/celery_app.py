@@ -1,24 +1,27 @@
 import logging
-from celery import Celery
+from typing import Any
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Global celery instance (lazy loaded)
-_celery_instance = None
+_celery_instance: Any = None
 
 
-def get_celery_app() -> Celery:
+def get_celery_app() -> Any:
     """
     Get or create Celery app instance.
-    Lazy initialization to avoid blocking startup.
+    Lazy initialization to avoid blocking startup and to support optional Celery.
     """
     global _celery_instance
-    
+
     if _celery_instance is not None:
         return _celery_instance
-    
+
     try:
+        from celery import Celery
+
         logger.info("Initializing Celery app...")
         _celery_instance = Celery(
             "const_ai_worker",
@@ -44,13 +47,19 @@ def get_celery_app() -> Celery:
             ])
         except Exception as e:
             logger.warning(f"Failed to autodiscover Celery tasks: {e}")
-        
+
         logger.info("Celery app initialized successfully")
         return _celery_instance
+    except ModuleNotFoundError as exc:
+        logger.warning(f"Celery package not installed: {exc}")
+        raise
     except Exception as e:
         logger.error(f"Failed to initialize Celery: {e}")
-        # Return a non-functional celery app so imports don't fail
-        _celery_instance = Celery("const_ai_worker")
+        try:
+            from celery import Celery
+            _celery_instance = Celery("const_ai_worker")
+        except Exception:
+            _celery_instance = None
         return _celery_instance
 
 

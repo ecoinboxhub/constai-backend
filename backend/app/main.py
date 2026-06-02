@@ -74,9 +74,10 @@ async def lifespan(app: FastAPI):
     
     # Include API routes lazily to avoid importing heavy modules at module import time
     try:
-        from app.api.v1.router import api_router
+        from app.api.v1.router import build_api_router
+        api_router = build_api_router()
         app.include_router(api_router, prefix=settings.api_prefix)
-        logger.info("API routers included lazily during lifespan startup")
+        logger.info("API routers built and included lazily during lifespan startup")
     except Exception as exc:
         logger.warning(f"Failed to include API routers during startup: {exc}")
 

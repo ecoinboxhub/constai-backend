@@ -39,7 +39,6 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from PyPDF2 import PdfReader
 import docx
 from app.services.weather import get_live_weather
-from app.modules.project_tracker.tasks import fetch_weather_data, process_project_document
 
 logger = logging.getLogger(__name__)
 
@@ -253,8 +252,12 @@ def get_weather_for_city(city: str) -> WeatherResponse:
         logger.info(f"Returning cached weather for {city}")
         return WeatherResponse(city=city.title(), **cached)
     
-    # Trigger background refresh
-    fetch_weather_data.delay(city)
+    # Trigger background refresh if Celery is available
+    try:
+        from app.modules.project_tracker.tasks import fetch_weather_data
+        fetch_weather_data.delay(city)
+    except Exception as exc:
+        logger.warning(f"Background weather refresh unavailable: {exc}")
     
     # Return live data immediately for better UX
     logger.info(f"Returning live (non-cached) weather for {city}")
