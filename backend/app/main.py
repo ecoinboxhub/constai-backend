@@ -15,7 +15,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.logging import configure_logging
-from app.api.v1.router import api_router
 from app.core.logging_middleware import StructuredLoggingMiddleware
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -37,6 +36,14 @@ def log_startup_diagnostics(stage: str):
         logger.info(f"[STARTUP] {stage} | Memory: {mem.rss / 1024 / 1024:.1f}MB ({percent:.1f}%)")
     except Exception:
         pass
+
+
+# Log immediate memory on module import to help profile import-time usage
+try:
+    process = psutil.Process()
+    logger.info(f"[IMPORT] module app.main imported | PID={process.pid} | RSS={process.memory_info().rss / 1024 / 1024:.1f}MB")
+except Exception:
+    pass
 
 
 @asynccontextmanager
@@ -65,6 +72,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.critical("AI Strategy Service: No LLM providers configured! Strategy features will fail.")
     
+    # Include API routes lazily to avoid importing heavy modules at module import time
+    try:
+        from app.api.v1.router import api_router
+        app.include_router(api_router, prefix=settings.api_prefix)
+        logger.info("API routers included lazily during lifespan startup")
+    except Exception as exc:
+        logger.warning(f"Failed to include API routers during startup: {exc}")
+
     log_startup_diagnostics("STARTUP_COMPLETE")
     logger.info("✅ FastAPI application ready to accept requests")
     
@@ -153,7 +168,7 @@ async def lazy_db_init_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
-app.include_router(api_router, prefix=settings.api_prefix)
+# API routers are included lazily during lifespan startup to avoid heavy imports at module import time
 
 @app.get("/")
 @app.get("/health")
@@ -168,6 +183,34 @@ def health_check():
             "memory_mb": round(mem_mb, 2),
             "db_initialized": _db_initialized
         }
+    except Exception:
+        return {"status": "ok"}
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness endpoint that does not initialize heavy models."""
+    try:
+        # Lazy import to avoid initializing providers
+        from app.services.llm import get_ai_health
+        ai = await get_ai_health()
+    except Exception:
+        ai = {}
+    return {
+        "status": "ready" if _db_initialized else "starting",
+        "db_initialized": _db_initialized,
+        "ai_providers": ai
+    }
+
+
+@app.get("/diagnostics")
+def diagnostics():
+    """Return lightweight diagnostics including current memory."""
+    try:
+        import psutil
+        p = psutil.Process()
+        mem = p.memory_info().rss / 1024 / 1024
+        return {"status": "ok", "memory_mb": round(mem, 2)}
     except Exception:
         return {"status": "ok"}
 

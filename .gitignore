@@ -66,3 +66,7 @@ backend/.env*
 *.crt
 
 dep/
+backend/construction_ai.db
+backend/construction_ai.db*
+
+/construction_ai.db

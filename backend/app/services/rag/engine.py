@@ -73,10 +73,27 @@ def _embedding_model():
         HuggingFaceEmbeddings = None
 
     if settings.openai_api_key and OpenAIEmbeddings is not None:
-        return OpenAIEmbeddings(api_key=settings.openai_api_key)
+        try:
+            # log memory before creating embedding client
+            try:
+                import psutil
+                logger.info(f"[EMBEDDING_INIT] Creating OpenAIEmbeddings | RSS={psutil.Process().memory_info().rss / 1024 / 1024:.1f}MB")
+            except Exception:
+                pass
+            return OpenAIEmbeddings(api_key=settings.openai_api_key)
+        except Exception:
+            raise
 
     if HuggingFaceEmbeddings is not None:
-        return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        try:
+            try:
+                import psutil
+                logger.info(f"[EMBEDDING_INIT] Creating HuggingFaceEmbeddings | RSS={psutil.Process().memory_info().rss / 1024 / 1024:.1f}MB")
+            except Exception:
+                pass
+            return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        except Exception:
+            raise
 
     raise RuntimeError("No embedding backend available: install langchain_openai or langchain_community.embeddings")
 
@@ -107,6 +124,11 @@ def get_vectorstore(persist_dir: str, collection_name: str = "const_ai_knowledge
             settings=ChromaClientSettings(anonymized_telemetry=False),
         )
         _CHROMA_CLIENTS[resolved_dir] = client
+        try:
+            import psutil
+            logger.info(f"[CHROMA_INIT] Created PersistentClient for {resolved_dir} | RSS={psutil.Process().memory_info().rss / 1024 / 1024:.1f}MB")
+        except Exception:
+            pass
 
     return Chroma(
         collection_name=collection_name,

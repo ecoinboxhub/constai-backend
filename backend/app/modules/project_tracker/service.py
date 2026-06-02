@@ -89,7 +89,17 @@ def _load_model(name: str):
         return _MODEL_CACHE[name]
     if model_path.exists():
         try:
+            try:
+                import psutil
+                logger.info(f"[MODEL_LOAD] Loading model {name} from {model_path} | RSS={psutil.Process().memory_info().rss / 1024 / 1024:.1f}MB")
+            except Exception:
+                pass
             model = joblib.load(model_path)
+            try:
+                import psutil
+                logger.info(f"[MODEL_LOAD] Completed loading {name} | RSS={psutil.Process().memory_info().rss / 1024 / 1024:.1f}MB")
+            except Exception:
+                pass
             _MODEL_CACHE[name] = model
             return model
         except Exception as exc:
