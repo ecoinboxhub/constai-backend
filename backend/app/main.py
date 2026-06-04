@@ -122,6 +122,7 @@ app = FastAPI(
 # CORS Configuration
 origins = [
     "http://localhost:3000",
+    "https://constai-frontend.vercel.app",
     "http://localhost:5173",
 ]
 if settings.production_domain:
@@ -130,7 +131,8 @@ if settings.production_domain:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"https://.*\.netlify\.app",
+    # Allow common hosting platforms (Netlify, Vercel, Render) if not explicitly configured
+    allow_origin_regex=r"https://.*\.(netlify\.app|vercel\.app)|https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
