@@ -5,19 +5,19 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Global celery instance (lazy loaded)
 _celery_instance: Any = None
 
 
 def get_celery_app() -> Any:
-    """
-    Get or create Celery app instance.
-    Lazy initialization to avoid blocking startup and to support optional Celery.
-    """
     global _celery_instance
 
     if _celery_instance is not None:
         return _celery_instance
+
+    if not settings.redis_url or settings.redis_url == "redis://localhost:6379/0":
+        logger.warning("Redis not configured. Celery will be unavailable.")
+        _celery_instance = None
+        return None
 
     try:
         from celery import Celery
@@ -37,9 +37,9 @@ def get_celery_app() -> Any:
             enable_utc=True,
             task_track_started=True,
             task_time_limit=3600,
+            task_always_eager=bool(settings.debug),
         )
 
-        # Auto-discover tasks in modules - DEFERRED until get_celery_app() called
         try:
             _celery_instance.autodiscover_tasks([
                 "app.modules.project_tracker.tasks",
@@ -50,29 +50,41 @@ def get_celery_app() -> Any:
 
         logger.info("Celery app initialized successfully")
         return _celery_instance
-    except ModuleNotFoundError as exc:
-        logger.warning(f"Celery package not installed: {exc}")
-        raise
+    except ModuleNotFoundError:
+        logger.warning("Celery package not installed. Background tasks disabled.")
+        _celery_instance = None
+        return None
     except Exception as e:
         logger.error(f"Failed to initialize Celery: {e}")
-        try:
-            from celery import Celery
-            _celery_instance = Celery("const_ai_worker")
-        except Exception:
-            _celery_instance = None
-        return _celery_instance
+        _celery_instance = None
+        return None
 
 
-# DO NOT initialize celery_app here - use get_celery_app() instead
-# For imports that expect "celery_app", create a lazy proxy
+def get_celery():
+    return get_celery_app()
+
+
 class LazyCeleryProxy:
-    """Lazy proxy that initializes Celery only when accessed."""
     def __getattr__(self, name):
-        return getattr(get_celery_app(), name)
-    
+        app = get_celery_app()
+        if app is None:
+            raise RuntimeError("Celery is not available. Check Redis configuration.")
+        return getattr(app, name)
+
     def __call__(self, *args, **kwargs):
-        return get_celery_app()(*args, **kwargs)
+        app = get_celery_app()
+        if app is None:
+            logger.warning("Celery task called but Celery is unavailable. Running synchronously.")
+            return None
+        return app(*args, **kwargs)
+
+    def task(self, *args, **kwargs):
+        app = get_celery_app()
+        if app is None:
+            def noop_decorator(f):
+                return f
+            return noop_decorator
+        return app.task(*args, **kwargs)
 
 
-# Export as celery_app for backward compatibility
-celery_app = LazyCeleryProxy()
+celery = LazyCeleryProxy()

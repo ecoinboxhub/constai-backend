@@ -2,14 +2,40 @@ services:
   - type: web
     name: constai-backend
     env: python
-    root: .
-    build_command: pip install -U pip && pip install -r requirements.txt
-    start_command: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
-    plan: starter  # Upgraded to 2GB RAM from free tier's 512MB
+    root: backend
+    build_command: pip install -U pip && pip install -r ../requirements.txt
+    start_command: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 30
+    plan: starter
     health_check_path: /health
-    health_check_timeout: 30  # Allow 30s startup before health check
+    health_check_timeout: 60
     env_vars:
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: PYTHONDONTWRITEBYTECODE
         value: "1"
+      - key: ENV
+        value: "production"
+      - key: DEBUG
+        value: "false"
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: PRODUCTION_DOMAIN
+        sync: false
+      - key: CHROMA_PERSIST_DIR
+        value: "/var/data/vector_indexes"

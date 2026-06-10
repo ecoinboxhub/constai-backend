@@ -10,20 +10,10 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.db.models.core import User, Company
 from app.modules.auth.schemas import Token, UserCreate
+from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
 
 logger = logging.getLogger(__name__)
 
-import bcrypt
-
-def hash_password(password: str) -> str:
-    truncated_pwd = password.encode('utf-8')[:72]
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(truncated_pwd, salt)
-    return hashed.decode('utf-8')
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    truncated_pwd = plain_password.encode('utf-8')[:72]
-    return bcrypt.checkpw(truncated_pwd, hashed_password.encode('utf-8'))
 
 def register_user(user_in: Any, provider: str = "email") -> Dict[str, Any]:
     session: Session = SessionLocal()
@@ -37,7 +27,6 @@ def register_user(user_in: Any, provider: str = "email") -> Dict[str, Any]:
                 detail="User with this email already exists."
             )
 
-        # Create company
         new_company = Company(
             name=getattr(user_in, "company_name", f"{email_clean} Company"),
             industry=getattr(user_in, "company_industry", "Construction"),
@@ -47,17 +36,20 @@ def register_user(user_in: Any, provider: str = "email") -> Dict[str, Any]:
         session.add(new_company)
         session.flush()
 
+        password = getattr(user_in, "password", None)
+        hashed = get_password_hash(password) if password else "social_auth"
+
         new_user = User(
             username=email_clean,
-            hashed_password=hash_password(user_in.password) if hasattr(user_in, "password") and user_in.password else "social_auth",
+            hashed_password=hashed,
             role=getattr(user_in, "role", "admin"),
             company_id=new_company.id
         )
-        
+
         session.add(new_user)
         session.commit()
         session.refresh(new_user)
-        
+
         return {
             "id": str(new_user.id),
             "email": new_user.username,
@@ -76,13 +68,14 @@ def register_user(user_in: Any, provider: str = "email") -> Dict[str, Any]:
     finally:
         session.close()
 
+
 def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     session: Session = SessionLocal()
     try:
         user = session.query(User).filter(User.username == email.lower()).first()
         if not user:
             return None
-        
+
         if verify_password(password, user.hashed_password):
             return {
                 "id": user.id,
@@ -97,8 +90,8 @@ def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
     finally:
         session.close()
 
+
 def create_tokens(user_id: str, role: str, company_id: Optional[int] = None) -> Token:
-    from app.core.security import create_access_token, create_refresh_token
     if company_id is None:
         session = SessionLocal()
         try:
@@ -120,11 +113,9 @@ async def request_otp_service(phone_number: str) -> bool:
 
     session = SessionLocal()
     try:
-        # Generate 6-digit verification code
         otp_code = "".join([str(random.randint(0, 9)) for _ in range(6)])
         expires = datetime.now(UTC) + timedelta(minutes=5)
 
-        # Rate limiting: invalidate any previous unexpired OTPs for this phone number
         session.query(OTPVerification).filter(
             OTPVerification.phone_number == phone_number,
             OTPVerification.is_verified == False
@@ -138,7 +129,6 @@ async def request_otp_service(phone_number: str) -> bool:
         session.add(otp_rec)
         session.commit()
 
-        # Send via Termii
         success = await send_otp_via_termii(phone_number, otp_code)
         return success
     except Exception as e:
@@ -167,17 +157,14 @@ async def verify_otp_service(phone_number: str, code: str) -> Dict[str, Any]:
                 detail="Invalid, expired, or already verified OTP code."
             )
 
-        # Mark verified
         otp_rec.is_verified = True
         session.commit()
 
-        # Onboard user: check if user already exists
         user = session.query(User).filter(
             (User.phone_number == phone_number) | (User.username == f"artisan_{phone_number}")
         ).first()
 
         if not user:
-            # First time OTP setup: Register new artisan profile
             new_company = Company(
                 name=f"Artisan_{phone_number}_Company",
                 industry="Construction Services",
@@ -189,7 +176,7 @@ async def verify_otp_service(phone_number: str, code: str) -> Dict[str, Any]:
 
             user = User(
                 username=f"artisan_{phone_number}",
-                hashed_password=hash_password(code), # Placeholder pwd
+                hashed_password=get_password_hash(code),
                 role="artisan",
                 company_id=new_company.id,
                 phone_number=phone_number
@@ -215,4 +202,3 @@ async def verify_otp_service(phone_number: str, code: str) -> Dict[str, Any]:
         )
     finally:
         session.close()
-

@@ -1,10 +1,12 @@
 from fastapi import APIRouter
-
-from app.schemas.common import HealthResponse
+from datetime import UTC, datetime
 
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=HealthResponse)
-def health_check() -> HealthResponse:
-    return HealthResponse()
+@router.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "timestamp": datetime.now(UTC).isoformat()
+    }

@@ -7,6 +7,7 @@ from app.core.security import decode_token
 
 router = APIRouter()
 
+
 class WorkforceCreate(BaseModel):
     first_name: str
     last_name: str
@@ -14,9 +15,11 @@ class WorkforceCreate(BaseModel):
     skills: Optional[str] = None
     project_id: Optional[str] = None
 
+
 class WorkforceResponse(WorkforceCreate):
     id: int
     is_active: bool
+
 
 @router.post("", response_model=WorkforceResponse)
 def create_worker(worker: WorkforceCreate, token: dict = Depends(decode_token)):
@@ -48,6 +51,7 @@ def create_worker(worker: WorkforceCreate, token: dict = Depends(decode_token)):
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
+
 
 @router.get("", response_model=List[WorkforceResponse])
 def get_workforce(token: dict = Depends(decode_token)):

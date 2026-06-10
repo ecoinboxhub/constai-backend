@@ -2,11 +2,11 @@ import logging
 import time
 import httpx
 from typing import Dict, Any, List
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Comprehensive Geographic Registry for Nigeria (States & LGAs)
 NIGERIA_GEOGRAPHY = {
     "Abia": ["Aba North", "Aba South", "Arochukwu", "Bende", "Ikwuano", "Isiala Ngwa North", "Isiala Ngwa South", "Isuikwuato", "Obi Ngwa", "Ohafia", "Osisioma Ngwa", "Ugwunagbo", "Ukwa East", "Ukwa West", "Umuahia North", "Umuahia South", "Umu Nneochi"],
     "Adamawa": ["Demsa", "Fufure", "Ganye", "Gayuk", "Gombi", "Grie", "Hong", "Jada", "Lamurde", "Madagali", "Maiha", "Mayo Belwa", "Michika", "Mubi North", "Mubi South", "Numan", "Shelleng", "Song", "Toungo", "Yola North", "Yola South"],
@@ -21,7 +21,7 @@ NIGERIA_GEOGRAPHY = {
     "Ebonyi": ["Abakaliki", "Afikpo North", "Afikpo South", "Ebonyi", "Ezza North", "Ezza South", "Ikwo", "Ishielu", "Ivo", "Izzi", "Ohaozara", "Ohaukwu", "Onicha"],
     "Edo": ["Akoko-Edo", "Egor", "Esan Central", "Esan North-East", "Esan South-East", "Esan West", "Etsako Central", "Etsako East", "Etsako West", "Igueben", "Ikpoba Okha", "Orhionmwon", "Oredo", "Ovia North-East", "Ovia South-West", "Owan East", "Owan West", "Uhunmwonde"],
     "Ekiti": ["Ado Ekiti", "Efon", "Ekiti East", "Ekiti South-West", "Ekiti West", "Emure", "Gbonyin", "Ido Osi", "Ijero", "Ikere", "Ikole", "Ilejemeje", "Irepodun/Ifelodun", "Ise/Orun", "Moba", "Oye"],
-    "Enugu": ["Aninri", "Awgu", "Enugu East", "Enugu North", "Enugu South", "Ezeagu", "Igbo Etiti", "Igbo Eze North", "Igbo Eze South", "Isi Uzo", "Itas/Gadau", "Nkano East", "Nkanu West", "Nsukka", "Oji River", "Udenu", "Udi", "Uzo Uwani"],
+    "Enugu": ["Aninri", "Awgu", "Enugu East", "Enugu North", "Enugu South", "Ezeagu", "Igbo Etiti", "Igbo Eze North", "Igbo Eze South", "Isi Uzo", "Nkano East", "Nkanu West", "Nsukka", "Oji River", "Udenu", "Udi", "Uzo Uwani"],
     "FCT": ["Abaji", "Bwari", "Gwagwalada", "Kuje", "Kwali", "Municipal Area Council"],
     "Gombe": ["Akko", "Balanga", "Billiri", "Dukku", "Funakaye", "Gombe", "Kaltungo", "Kwami", "Nafada", "Shongom", "Yamaltu/Deba"],
     "Imo": ["Aboh Mbaise", "Ahiazu Mbaise", "Ehime Mbano", "Ezinihitte", "Ideato North", "Ideato South", "Ihitte/Uboma", "Ikeduru", "Isiala Mbano", "Isu", "Mbaitoli", "Ngor Okpala", "Njaba", "Nkwerre", "Nwangele", "Obowo", "Oguta", "Ohaji/Egbema", "Okigwe", "Orlu", "Orsu", "Oru East", "Oru West", "Owerri Municipal", "Owerri North", "Owerri South", "Onuimo"],
@@ -40,25 +40,21 @@ NIGERIA_GEOGRAPHY = {
     "Osun": ["Atakunmosa East", "Atakunmosa West", "Aiyedaade", "Aiyedire", "Boluwaduro", "Boripe", "Ede North", "Ede South", "Ife Central", "Ife East", "Ife North", "Ife South", "Egbedore", "Ejigbo", "Ifedayo", "Ifelodun", "Ila", "Ilesa East", "Ilesa West", "Irepodun", "Irewole", "Isokan", "Iwo", "Obokun", "Odo Otin", "Ola Oluwa", "Olorunda", "Oriade", "Orolu", "Osogbo"],
     "Oyo": ["Afijio", "Akinyele", "Atiba", "Atisbo", "Egbeda", "Ibadan North", "Ibadan North-East", "Ibadan North-West", "Ibadan South-East", "Ibadan South-West", "Ibarapa Central", "Ibarapa East", "Ibarapa North", "Ido", "Irepo", "Iseyin", "Itesiwaju", "Iwajowa", "Kajola", "Lagelu", "Ogbomosho North", "Ogbomosho South", "Ogo Oluwa", "Olorunsogo", "Oluyole", "Ona Ara", "Orelope", "Ori Ire", "Oyo", "Oyo East", "Saki East", "Saki West", "Surulere"],
     "Plateau": ["Bokkos", "Barkin Ladi", "Bassa", "Jos East", "Jos North", "Jos South", "Kanam", "Kanke", "Langtang North", "Langtang South", "Mangu", "Mikang", "Pankshin", "Qua'an Pan", "Riyom", "Shendam", "Wase"],
-    "Rivers": ["Abua/Odual", "Ahoada East", "Ahoada West", "Akuku-Toru", "Andoni", "Asari-Toru", "Bonny", "Degema", "Eleme", "Emuoha", "Etche", " Gokana", "Ikwerre", "Khana", "Obio/Akpor", "Ogba/Egbema/Ndoni", "Ogu/Bolo", "Okrika", "Omuma", "Opobo/Nkoro", "Oyigbo", "Port Harcourt", "Tai"],
+    "Rivers": ["Abua/Odual", "Ahoada East", "Ahoada West", "Akuku-Toru", "Andoni", "Asari-Toru", "Bonny", "Degema", "Eleme", "Emuoha", "Etche", "Gokana", "Ikwerre", "Khana", "Obio/Akpor", "Ogba/Egbema/Ndoni", "Ogu/Bolo", "Okrika", "Omuma", "Opobo/Nkoro", "Oyigbo", "Port Harcourt", "Tai"],
     "Sokoto": ["Binji", "Bodinga", "Dange Shuni", "Gada", "Goronyo", "Gudu", "Gwadabawa", "Illela", "Isa", "Kebbe", "Kware", "Rabah", "Sabon Birni", "Shagari", "Silame", "Sokoto North", "Sokoto South", "Tambuwal", "Tangaza", "Tureta", "Wamako", "Wurno", "Yabo"],
     "Taraba": ["Ardo Kola", "Bali", "Donga", "Gashaka", "Gassol", "Ibi", "Jalingo", "Karim Lamido", "Kumi", "Lau", "Sardauna", "Takum", "Ussa", "Wukari", "Yorro", "Zing"],
-    "Yobe": ["Bade", "Bursari", "Damaturu", "Fika", "Fune", "Geidam", "Gujba", "Gulani", "Jakusko", "Karasuwa", "Machina", " Nangere", "Nguru", "Potiskum", "Tarmuwa", "Yunusari", "Yusufari"],
+    "Yobe": ["Bade", "Bursari", "Damaturu", "Fika", "Fune", "Geidam", "Gujba", "Gulani", "Jakusko", "Karasuwa", "Machina", "Nangere", "Nguru", "Potiskum", "Tarmuwa", "Yunusari", "Yusufari"],
     "Zamfara": ["Anka", "Bakura", "Birnin Magaji/Kiyaw", "Bukkuyum", "Bungudu", "Gummi", "Gusau", "Kaura Namoda", "Maradun", "Maru", "Shinkafi", "Talata Mafara", "Chafe", "Zurmi"]
 }
 
+
 def get_nigerian_locations() -> Dict[str, List[str]]:
-    """Returns the full registry of Nigerian States and their Local Government Areas."""
     return NIGERIA_GEOGRAPHY
 
+
 def get_live_weather(city: str) -> Dict[str, Any]:
-    """
-    Fetches strictly real-time weather data from OpenWeatherMap API.
-    Refactored to remove all mock fallbacks and static value substitutions.
-    """
     city_key = city.title().strip()
-    
-    # Strictly enforce API usage
+
     if not settings.openweather_api_key or settings.openweather_api_key == "change-me":
         logger.error("Weather intelligence failure: OPENWEATHER_API_KEY is not configured.")
         return {
@@ -68,17 +64,15 @@ def get_live_weather(city: str) -> Dict[str, Any]:
         }
 
     try:
-        # Determine if it's a known Nigerian state or LGA for query optimization
         is_nigerian = any(city_key == state or city_key in lgas for state, lgas in NIGERIA_GEOGRAPHY.items())
         query_city = f"{city},NG" if is_nigerian else city
-        
+
         url = f"https://api.openweathermap.org/data/2.5/weather?q={query_city}&appid={settings.openweather_api_key}&units=metric"
-        
-        # Implementation of robust retry and monitoring
+
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                with httpx.Client(timeout=10.0, verify=False) as client:
+                with httpx.Client(timeout=10.0, verify=True) as client:
                     response = client.get(url)
                     if response.status_code == 200:
                         data = response.json()
@@ -93,19 +87,18 @@ def get_live_weather(city: str) -> Dict[str, Any]:
                             "fetched_at": time.time(),
                             "source": "OpenWeatherMap API (Live)"
                         }
-                        # AI Alerting Layer
                         if any(w["id"] < 700 for w in data["weather"]):
                             weather_info["severe_alert"] = f"AI Alert: Severe {weather_info['description']} detected at site."
-                        
+
                         return weather_info
-                    
+
                     elif response.status_code == 404:
                         logger.warning(f"Location not found: {city}")
                         return {"error": "Not Found", "message": f"Location '{city}' could not be resolved by API."}
-                    
+
                     elif response.status_code == 429:
                         logger.error("Weather API rate limit exceeded.")
-                        time.sleep(1) # Backoff
+                        time.sleep(1)
                         continue
             except httpx.RequestError as exc:
                 logger.error(f"Attempt {attempt + 1} failed for {city}: {exc}")
@@ -117,7 +110,7 @@ def get_live_weather(city: str) -> Dict[str, Any]:
         logger.error(f"Critical failure in weather service for {city}: {exc}")
         return {
             "error": "Service Unavailable",
-            "message": "Strict Live-Data policy enforced. Mock data rejected.",
+            "message": "Live weather data unavailable.",
             "details": str(exc),
             "source": "ConstAI Reliability Engine"
         }

@@ -1,26 +1,23 @@
 import os
-import re
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Optional
 
-# Disable telemetry BEFORE any imports
 os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
-# Silence telemetry logs early
 logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 from app.core.config import settings
 
-# Lazy-loaded globals (not loaded until actually used)
 _chromadb = None
 _Chroma = None
-_OllamaLLM = None
 _CHROMA_CLIENTS: dict[str, Any] = {}
 
+logger = logging.getLogger(__name__)
+
+
 def _lazy_import_chromadb():
-    """Lazy load chromadb only when needed."""
     global _chromadb, _Chroma
     if _chromadb is None:
         import chromadb
@@ -30,18 +27,7 @@ def _lazy_import_chromadb():
         _Chroma = Chroma
     return _chromadb, _Chroma
 
-def _lazy_import_ollama():
-    """Lazy load OllamaLLM only when needed."""
-    global _OllamaLLM
-    if _OllamaLLM is None:
-        try:
-            from langchain_ollama import OllamaLLM
-            _OllamaLLM = OllamaLLM
-        except Exception:
-            _OllamaLLM = False  # Mark as tried but failed
-    return _OllamaLLM if _OllamaLLM is not False else None
 
-# Updated to ChatPromptTemplate (required for v1 chains)
 PROMPT_TEMPLATE = """Answer the question based only on the following context:
 
 Context: {context}
@@ -53,15 +39,8 @@ Analyze for safety hazards and risks.
 
 Question: {input}"""
 
-# Text splitter will be imported lazily inside functions
 
-
-# -----------------------------
-# Embedding model
-# -----------------------------
 def _embedding_model():
-    """Get embedding model, preferring OpenAI if available, falling back to HuggingFace."""
-    # Import embedding implementations lazily to avoid import-time failures
     try:
         from langchain_openai import OpenAIEmbeddings
     except Exception:
@@ -74,61 +53,43 @@ def _embedding_model():
 
     if settings.openai_api_key and OpenAIEmbeddings is not None:
         try:
-            # log memory before creating embedding client
-            try:
-                import psutil
-                logger.info(f"[EMBEDDING_INIT] Creating OpenAIEmbeddings | RSS={psutil.Process().memory_info().rss / 1024 / 1024:.1f}MB")
-            except Exception:
-                pass
             return OpenAIEmbeddings(api_key=settings.openai_api_key)
         except Exception:
-            raise
+            pass
 
     if HuggingFaceEmbeddings is not None:
         try:
-            try:
-                import psutil
-                logger.info(f"[EMBEDDING_INIT] Creating HuggingFaceEmbeddings | RSS={psutil.Process().memory_info().rss / 1024 / 1024:.1f}MB")
-            except Exception:
-                pass
             return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         except Exception:
-            raise
+            pass
 
     raise RuntimeError("No embedding backend available: install langchain_openai or langchain_community.embeddings")
 
-# Cache embedding model
+
 _embedding_cache = None
 
+
 def get_embedding_model():
-    """Get cached embedding model."""
     global _embedding_cache
     if _embedding_cache is None:
         _embedding_cache = _embedding_model()
     return _embedding_cache
 
-# -----------------------------
-# Vector store
-# -----------------------------
+
 def get_vectorstore(persist_dir: str, collection_name: str = "const_ai_knowledge") -> Any:
-    """Get Chroma vector store with lazy chromadb initialization."""
     chromadb_module, Chroma = _lazy_import_chromadb()
     ChromaClientSettings = chromadb_module.config.Settings
-    
+
     resolved_dir = str(Path(persist_dir).resolve())
     client = _CHROMA_CLIENTS.get(resolved_dir)
-    
+
     if client is None:
+        os.makedirs(resolved_dir, exist_ok=True)
         client = chromadb_module.PersistentClient(
             path=resolved_dir,
             settings=ChromaClientSettings(anonymized_telemetry=False),
         )
         _CHROMA_CLIENTS[resolved_dir] = client
-        try:
-            import psutil
-            logger.info(f"[CHROMA_INIT] Created PersistentClient for {resolved_dir} | RSS={psutil.Process().memory_info().rss / 1024 / 1024:.1f}MB")
-        except Exception:
-            pass
 
     return Chroma(
         collection_name=collection_name,
@@ -137,8 +98,8 @@ def get_vectorstore(persist_dir: str, collection_name: str = "const_ai_knowledge
         client=client,
     )
 
+
 def chunk_document(text: str, chunk_size: int = 1000, overlap: int = 100) -> list[str]:
-    """Split document into chunks. Lazy import to avoid startup overhead."""
     try:
         from langchain_text_splitters import RecursiveCharacterTextSplitter
     except Exception:
@@ -151,35 +112,31 @@ def chunk_document(text: str, chunk_size: int = 1000, overlap: int = 100) -> lis
     )
     return splitter.split_text(text)
 
-# -----------------------------
-# Isolated Retrieval with Citations
-# -----------------------------
+
 async def query_project_knowledge(
-    project_id: int, 
-    company_id: int, 
-    question: str, 
+    project_id: int,
+    company_id: int,
+    question: str,
     persist_dir: str,
     k: int = 4
 ) -> dict[str, Any]:
-    """Query vector store for project-specific knowledge with lazy initialization."""
     vectorstore = get_vectorstore(persist_dir)
-    
-    # Isolation via metadata filtering
+
     search_filter = {
         "$and": [
             {"project_id": project_id},
             {"company_id": company_id}
         ]
     }
-    
+
     docs = vectorstore.similarity_search(question, k=k, filter=search_filter)
-    
+
     if not docs:
         return {"answer": "No relevant documents found for this project.", "sources": []}
 
     context = "\n\n".join(d.page_content for d in docs)
     sources = list(set(d.metadata.get("source", "Unknown") for d in docs))
-    
+
     prompt = f"""You are a construction project assistant. Use the following context to answer the question.
 If the answer isn't in the context, say you don't know based on provided docs.
 
@@ -192,7 +149,7 @@ Helpful Answer:"""
 
     from app.services.llm import ask_ai
     answer = await ask_ai(prompt)
-    
+
     return {
         "answer": answer,
         "sources": sources

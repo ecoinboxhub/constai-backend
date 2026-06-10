@@ -2,11 +2,9 @@ import logging
 import traceback
 import sys
 import os
-import psutil
 import gc
 from contextlib import asynccontextmanager
 
-# Ensure the repository's `backend` directory is on sys.path so `app` is importable
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from fastapi import FastAPI, Request
@@ -17,19 +15,16 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.core.logging_middleware import StructuredLoggingMiddleware
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 configure_logging()
 logger = logging.getLogger(__name__)
 
-# Global flags to track initialization
 _db_initialized = False
 _db_init_attempted = False
 
 
 def log_startup_diagnostics(stage: str):
-    """Log memory usage and current state during startup."""
     try:
+        import psutil
         process = psutil.Process()
         mem = process.memory_info()
         percent = process.memory_percent()
@@ -38,67 +33,52 @@ def log_startup_diagnostics(stage: str):
         pass
 
 
-# Log immediate memory on module import to help profile import-time usage
-try:
-    process = psutil.Process()
-    logger.info(f"[IMPORT] module app.main imported | PID={process.pid} | RSS={process.memory_info().rss / 1024 / 1024:.1f}MB")
-except Exception:
-    pass
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """FastAPI lifespan context manager with optimized startup."""
     log_startup_diagnostics("STARTUP_BEGIN")
-    
-    # Startup phase
+
     try:
-        # Defer database initialization - do NOT block on startup
-        # Database will be initialized lazily on first request
         logger.info("Database initialization deferred to first request for faster startup")
         log_startup_diagnostics("STARTUP_DEFERRED_DB")
     except Exception as exc:
         logger.warning(f"Startup warning: {exc}")
-    
-    # AI Provider Validation (non-blocking check)
+
     providers = []
     if settings.gemini_api_key and settings.gemini_api_key != "change-me":
         providers.append(f"Gemini ({settings.gemini_default_model})")
     if settings.groq_api_key and settings.groq_api_key != "change-me":
         providers.append(f"Groq ({settings.groq_default_model})")
-    
+
     if providers:
         logger.info(f"AI Strategy Service initializing with: {', '.join(providers)}")
     else:
-        logger.critical("AI Strategy Service: No LLM providers configured! Strategy features will fail.")
-    
-    # Include API routes lazily to avoid importing heavy modules at module import time
+        logger.warning("AI Strategy Service: No LLM providers configured! Strategy features will fail.")
+
     try:
         from app.api.v1.router import build_api_router
         api_router = build_api_router()
         app.include_router(api_router, prefix=settings.api_prefix)
         logger.info("API routers built and included lazily during lifespan startup")
     except Exception as exc:
-        logger.warning(f"Failed to include API routers during startup: {exc}")
+        logger.error(f"Failed to include API routers during startup: {exc}")
+        raise
 
     log_startup_diagnostics("STARTUP_COMPLETE")
-    logger.info("✅ FastAPI application ready to accept requests")
-    
+    logger.info("FastAPI application ready to accept requests")
+
     yield
-    
-    # Shutdown phase
+
     logger.info("Application shutting down...")
     gc.collect()
     log_startup_diagnostics("SHUTDOWN_COMPLETE")
 
 
 def ensure_db_initialized():
-    """Initialize database on first request if not already done."""
     global _db_initialized, _db_init_attempted
-    
+
     if _db_initialized or _db_init_attempted:
         return
-    
+
     _db_init_attempted = True
     try:
         from app.db.session import init_db_engine, init_db
@@ -114,12 +94,11 @@ def ensure_db_initialized():
 
 
 app = FastAPI(
-    title=settings.app_name, 
+    title=settings.app_name,
     version="0.1.0",
     lifespan=lifespan
 )
 
-# CORS Configuration
 origins = [
     "http://localhost:3000",
     "https://constai-frontend.vercel.app",
@@ -131,8 +110,7 @@ if settings.production_domain:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    # Allow common hosting platforms (Netlify, Vercel, Render) if not explicitly configured
-    allow_origin_regex=r"https://.*\.(netlify\.app|vercel\.app)|https://.*\.onrender\.com",
+    allow_origin_regex=r"https://.*\.(netlify\.app|vercel\.app|onrender\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -142,6 +120,7 @@ app.add_middleware(StructuredLoggingMiddleware)
 
 from app.services.llm import AIServiceError
 
+
 @app.exception_handler(AIServiceError)
 async def ai_service_exception_handler(request: Request, exc: AIServiceError):
     logger.error(f"AI Service Error at {request.url.path}: {exc}")
@@ -150,9 +129,9 @@ async def ai_service_exception_handler(request: Request, exc: AIServiceError):
         content={
             "detail": str(exc),
             "error_type": "AI_SERVICE_UNAVAILABLE",
-            "provider_errors": exc.details
         }
     )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -163,71 +142,63 @@ async def global_exception_handler(request: Request, exc: Exception):
         detail = f"{str(exc)}\n{traceback.format_exc()}"
     return JSONResponse(status_code=500, content={"detail": detail})
 
-# Include API router with lazy DB initialization
+
 @app.middleware("http")
 async def lazy_db_init_middleware(request: Request, call_next):
-    """Ensure database is initialized before processing requests."""
+    if request.url.path in ("/", "/health", "/ready", "/diagnostics", "/docs", "/openapi.json"):
+        response = await call_next(request)
+        return response
     ensure_db_initialized()
     response = await call_next(request)
     return response
 
-# API routers are included lazily during lifespan startup to avoid heavy imports at module import time
 
 @app.get("/")
 @app.get("/health")
 def health_check():
-    """Simple health check that responds immediately without waiting for DB."""
     try:
         import psutil
         process = psutil.Process()
         mem_mb = process.memory_info().rss / 1024 / 1024
-        return {
-                        {
-            "name": "ConstAI",
-            "tagline": "Building Africa's Future with Predictive Construction Intelligence",
-            "status": "operational",
-            "version": "0.1.0",
-            "region": "Nigeria & Africa",
-            "overview": "An enterprise-grade AI platform for predictive risk management, cost optimization, compliance automation, and operational excellence across the construction lifecycle.",
-            "key_outcomes": {
-                "reduce_delays": true,
-                "control_budget_overruns": true,
-                "improve_regulatory_compliance": true,
-                "enhance_site_productivity": true,
-                "centralize_project_intelligence": true
-            },
-            "modules": [
-                "Project Tracker",
-                "Delay Predictor",
-                "AI Copilot",
-                "Document Analyzer",
-                "Legal RAG Search",
-                "Weather Intelligence",
-                "Workforce Management",
-                "Site Logs",
-                "Analytics Dashboard",
-                "Notifications"
-            ],
-            "docs": "/docs",
-            "health": "/health",
-            "ready": "/ready"
-            }
-        }
-    
     except Exception:
-        return {"status": "Ok",
-                "Operational": True,
-                "Title": "Construction AI Platform",
-                "Tagline": "Building Africa's Future with Predictive Construction Intelligence",
-                "Version": "0.1.0"
-        }
+        mem_mb = 0
+
+    return {
+        "name": "ConstAI",
+        "tagline": "Building Africa's Future with Predictive Construction Intelligence",
+        "status": "operational",
+        "version": "0.1.0",
+        "memory_mb": round(mem_mb, 2) if mem_mb else None,
+        "region": "Nigeria & Africa",
+        "overview": "An enterprise-grade AI platform for predictive risk management, cost optimization, compliance automation, and operational excellence across the construction lifecycle.",
+        "key_outcomes": {
+            "reduce_delays": True,
+            "control_budget_overruns": True,
+            "improve_regulatory_compliance": True,
+            "enhance_site_productivity": True,
+            "centralize_project_intelligence": True
+        },
+        "modules": [
+            "Project Tracker",
+            "Delay Predictor",
+            "AI Copilot",
+            "Document Analyzer",
+            "Legal RAG Search",
+            "Weather Intelligence",
+            "Workforce Management",
+            "Site Logs",
+            "Analytics Dashboard",
+            "Notifications"
+        ],
+        "docs": "/docs",
+        "health": "/health",
+        "ready": "/ready"
+    }
 
 
 @app.get("/ready")
 async def readiness_check():
-    """Readiness endpoint that does not initialize heavy models."""
     try:
-        # Lazy import to avoid initializing providers
         from app.services.llm import get_ai_health
         ai = await get_ai_health()
     except Exception:
@@ -241,7 +212,6 @@ async def readiness_check():
 
 @app.get("/diagnostics")
 def diagnostics():
-    """Return lightweight diagnostics including current memory."""
     try:
         import psutil
         p = psutil.Process()
@@ -257,6 +227,6 @@ if __name__ == "__main__":
         "app.main:app",
         host="0.0.0.0",
         port=port,
-        workers=1,  # Single worker for memory efficiency
-        reload=getattr(settings, "debug", False),
+        workers=1,
+        reload=settings.debug,
     )

@@ -5,7 +5,23 @@ import mlflow
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from app.core.config import settings
-from app.services.rag.engine import get_vectorstore, load_documents
+from app.services.rag.engine import get_vectorstore, chunk_document
+
+
+def load_documents(pdf_paths: list[str], web_urls: list[str]) -> list:
+    docs = []
+    for path in pdf_paths:
+        p = Path(path)
+        if p.exists():
+            from langchain.schema import Document
+            try:
+                from PyPDF2 import PdfReader
+                reader = PdfReader(str(p))
+                text = "\n\n".join(page.extract_text() or "" for page in reader.pages)
+                docs.append(Document(page_content=text, metadata={"source": str(p)}))
+            except Exception:
+                pass
+    return docs
 
 
 def build_index(
@@ -25,9 +41,8 @@ def build_index(
     vectordb = get_vectorstore(str(persist_dir), collection_name=name)
     if chunks:
         vectordb.add_documents(chunks)
-        vectordb.persist()
 
-    mlflow.set_experiment(f"{settings.mlflow_experiment_prefix}_{name}")
+    mlflow.set_experiment(f"{name}_index_build")
     with mlflow.start_run(run_name="index_build"):
         mlflow.log_metric("documents", len(docs))
         mlflow.log_metric("chunks", len(chunks))

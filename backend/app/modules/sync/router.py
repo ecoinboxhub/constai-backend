@@ -8,17 +8,19 @@ from app.db.models.core import AuditLog
 
 router = APIRouter()
 
+
 class ReconcileItem(BaseModel):
-  client_uuid: str
-  table_name: str
-  action: str
-  payload: Dict[str, Any]
+    client_uuid: str
+    table_name: str
+    action: str
+    payload: Dict[str, Any]
+
 
 @router.post("/reconcile")
 def reconcile(item: ReconcileItem, token: dict = Depends(decode_token)):
     company_id = token.get("company_id")
     user_id = token.get("sub")
-    
+
     if not company_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -27,7 +29,6 @@ def reconcile(item: ReconcileItem, token: dict = Depends(decode_token)):
 
     db = SessionLocal()
     try:
-        # Process transaction
         result = reconcile_client_item(
             db=db,
             company_id=int(company_id),
@@ -36,8 +37,7 @@ def reconcile(item: ReconcileItem, token: dict = Depends(decode_token)):
             action=item.action.upper(),
             payload=item.payload
         )
-        
-        # Log successful sync in central audit logs table
+
         audit_entry = AuditLog(
             user_id=str(user_id),
             endpoint="/api/v1/sync/reconcile",
@@ -46,7 +46,7 @@ def reconcile(item: ReconcileItem, token: dict = Depends(decode_token)):
         )
         db.add(audit_entry)
         db.commit()
-        
+
         return {
             "status": "success",
             "client_uuid": item.client_uuid,
