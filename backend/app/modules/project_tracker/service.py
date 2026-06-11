@@ -1,13 +1,10 @@
 import io
-import json
 import logging
-import re
 import time
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Optional, Dict, List
+from typing import Optional
 
-import joblib
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -39,6 +36,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from PyPDF2 import PdfReader
 import docx
 from app.services.weather import get_live_weather
+from app.services.model_service import (
+    predict_delay as model_predict_delay,
+    predict_budget_overrun as model_predict_budget,
+    predict_risk as model_predict_risk,
+    extract_project_data,
+    extract_quickpredict_data,
+    log_prediction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,37 +65,8 @@ def get_session():
         session.close()
 
 
-MODEL_FEATURES = [
-    "budget_allocated", "budget_spent", "workforce_count", "equipment_count",
-    "material_cost", "completion_percentage", "weather_delay_days",
-    "safety_incidents", "inspection_score", "task_completion_rate", "daily_progress_rate",
-]
-
-_MODEL_CACHE: dict[str, Any] = {}
-
-
 def _safe_float(value: Optional[float], default: float = 0.0) -> float:
     return float(value) if value is not None else default
-
-
-def _load_model(name: str):
-    model_path = Path(settings.model_registry_path)
-    if not model_path.is_absolute():
-        model_path = Path(__file__).resolve().parents[4] / model_path
-    model_path = model_path / name
-    if name in _MODEL_CACHE:
-        return _MODEL_CACHE[name]
-    if model_path.exists():
-        try:
-            model = joblib.load(model_path)
-            _MODEL_CACHE[name] = model
-            return model
-        except Exception as exc:
-            logger.warning(f"Unable to load model {name}: {exc}")
-    else:
-        logger.warning(f"Model file not found: {model_path}")
-    _MODEL_CACHE[name] = None
-    return None
 
 
 def _project_to_response(project: Project) -> ProjectResponse:
@@ -196,7 +172,6 @@ def get_dashboard_metrics(company_id: int) -> DashboardMetricsResponse:
                 risk_score=0.0, active_issues=0, productivity_index=0.0,
             )
 
-        delayed = sum(1 for p in projects if p.delay_status and p.delay_status.lower() == "delayed")
         completed = sum(1 for p in projects if p.project_status and p.project_status.lower() in {"complete", "completed"})
         active = sum(1 for p in projects if p.project_status and p.project_status.lower() == "active")
         avg_completion = sum((p.completion_percentage or 0.0) for p in projects) / total
@@ -209,21 +184,68 @@ def get_dashboard_metrics(company_id: int) -> DashboardMetricsResponse:
 
         avg_budget_utilization = sum(budget_rates) / len(budget_rates) if budget_rates else 0.0
 
-        risk_score = sum({"low": 0.2, "medium": 0.5, "high": 0.85}.get((p.risk_level or "medium").lower(), 0.5) for p in projects) / total
-        active_issues = sum(1 for p in projects if (p.safety_incidents or 0) > 0 or (p.delay_status and p.delay_status.lower() == "delayed"))
+        ml_delayed = 0
+        total_delay_risk = 0.0
+        total_risk_score = 0.0
+        total_budget_overrun = 0.0
+        ml_issues = 0
+
+        for p in projects:
+            try:
+                pdata = extract_project_data(p)
+                dres = model_predict_delay(pdata)
+                pdata["_delay_prob"] = dres["delay_risk"]
+                bres = model_predict_budget(pdata)
+                rres = model_predict_risk(pdata)
+
+                if dres.get("will_delay", False):
+                    ml_delayed += 1
+
+                delay_risk = dres.get("delay_risk", 0.0)
+                total_delay_risk += delay_risk
+
+                budget_prob = bres.get("overrun_probability", 0.0)
+                total_budget_overrun += budget_prob
+
+                risk_label = rres.get("risk_level", "medium")
+                risk_val = {"low": 0.2, "medium": 0.5, "high": 0.85}.get(risk_label.lower(), 0.5)
+                total_risk_score += risk_val
+
+                if dres.get("will_delay", False) or (p.safety_incidents or 0) > 0:
+                    ml_issues += 1
+            except Exception:
+                delayed_legacy = p.delay_status and p.delay_status.lower() == "delayed"
+                if delayed_legacy:
+                    ml_delayed += 1
+                    total_delay_risk += 1.0
+                else:
+                    total_delay_risk += 0.0
+
+                spent = float(getattr(p, 'budget_spent', 0) or 0)
+                allocated = float(getattr(p, 'budget_allocated', 1) or 1)
+                total_budget_overrun += min(1.0, spent / max(allocated, 1))
+
+                risk_legacy = {"low": 0.2, "medium": 0.5, "high": 0.85}.get((p.risk_level or "medium").lower(), 0.5)
+                total_risk_score += risk_legacy
+
+                if delayed_legacy or (p.safety_incidents or 0) > 0:
+                    ml_issues += 1
+
+        avg_delay_risk = total_delay_risk / total if total > 0 else 0.0
+        avg_risk_score = total_risk_score / total if total > 0 else 0.0
 
         productivity_index = sum((p.task_completion_rate or (p.completion_percentage / 100 if p.completion_percentage else 0.0)) for p in projects) / total * 100
 
         res = DashboardMetricsResponse(
             total_projects=total,
             active_projects=active,
-            delayed_projects=delayed,
+            delayed_projects=ml_delayed,
             completed_projects=completed,
             average_completion=round(avg_completion, 2),
             average_budget_utilization=round(avg_budget_utilization * 100, 2),
-            delay_probability=round(delayed / total, 3),
-            risk_score=round(risk_score * 100, 2),
-            active_issues=active_issues,
+            delay_probability=round(avg_delay_risk, 3),
+            risk_score=round(avg_risk_score * 100, 2),
+            active_issues=ml_issues,
             productivity_index=round(productivity_index, 2),
         )
         logger.info(f"Computed fresh metrics for company {company_id}: {res}")
@@ -311,68 +333,6 @@ def predict_delay(payload: DelayPredictionRequest) -> DelayPredictionResponse:
     )
 
 
-def _feature_vector(project: Project) -> list[float]:
-    return [
-        _safe_float(project.budget_allocated),
-        _safe_float(project.budget_spent),
-        float(project.workforce_count or 0),
-        float(project.equipment_count or 0),
-        _safe_float(project.material_cost),
-        _safe_float(project.completion_percentage),
-        float(project.weather_delay_days or 0),
-        float(project.safety_incidents or 0),
-        _safe_float(project.inspection_score),
-        _safe_float(project.task_completion_rate),
-        _safe_float(project.daily_progress_rate),
-    ]
-
-
-def _safe_model_probability(model: Any, vector: list[float], fallback_fn, project: Project) -> float:
-    expected = getattr(model, "n_features_in_", None)
-    if expected is not None and expected != len(vector):
-        logger.warning(
-            "Model feature count mismatch: expected %s, got %s. Falling back to heuristics.",
-            expected, len(vector),
-        )
-        return fallback_fn(project)
-    try:
-        return float(model.predict_proba([vector])[0][1])
-    except Exception as exc:
-        logger.warning("Model prediction failed, falling back to heuristics: %s", exc)
-        return fallback_fn(project)
-
-
-async def _ai_driven_delay_probability(project: Project, weather: Dict[str, Any]) -> float:
-    prompt = f"""
-    Act as a construction risk AI. Analyze this project data and return a delay probability (0.0 to 1.0).
-    Project: {project.name}
-    Type: {project.project_type}
-    Completion: {project.completion_percentage}%
-    Workforce: {project.workforce_count}
-    Task Completion Rate: {project.task_completion_rate}
-    Weather Condition: {weather.get('condition', 'Unknown')}
-    Rainfall: {weather.get('rainfall_mm', 0)}mm
-    Temperature: {weather.get('temperature_c', 28)}C
-
-    Respond ONLY with a JSON object: {{"probability": float, "reasoning": "string"}}
-    """
-    try:
-        response_text = await ask_ai(prompt)
-        match = re.search(r'\{.*\}', response_text, re.DOTALL)
-        if match:
-            data = json.loads(match.group())
-            return float(data.get("probability", 0.5))
-    except Exception as exc:
-        logger.error(f"AI-driven reasoning failed: {exc}")
-
-    score = 0.1
-    if (project.task_completion_rate or 0.0) < 0.7:
-        score += 0.3
-    if weather.get('rainfall_mm', 0) > 10:
-        score += 0.4
-    return min(1.0, score)
-
-
 def _heuristic_budget_probability(project: Project) -> float:
     spent = _safe_float(project.budget_spent)
     allocated = _safe_float(project.budget_allocated, 1.0)
@@ -404,26 +364,23 @@ async def get_project_predictions(project_id: int, company_id: int) -> Predictio
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        delay_model = _load_model("delay_model.pkl")
-        budget_model = _load_model("budget_model.pkl")
-
         weather_context = get_live_weather(project.location or "Lagos")
         if "error" in weather_context:
             logger.warning(f"Live weather unavailable for {project.location}: {weather_context['message']}")
 
-        vector = _feature_vector(project)
+        project_data = extract_project_data(project)
 
-        if delay_model:
-            try:
-                delay_prob = float(delay_model.predict_proba([vector])[0][1])
-            except Exception:
-                delay_prob = await _ai_driven_delay_probability(project, weather_context)
-        else:
-            delay_prob = await _ai_driven_delay_probability(project, weather_context)
+        delay_result = model_predict_delay(project_data)
+        delay_prob = delay_result["delay_risk"]
 
-        budget_prob = _safe_model_probability(budget_model, vector, _heuristic_budget_probability, project) if budget_model else _heuristic_budget_probability(project)
+        project_data["_delay_prob"] = delay_prob
+        budget_result = model_predict_budget(project_data)
+        budget_prob = budget_result["overrun_probability"]
 
-        risk_label = _classify_risk(project, delay_prob=delay_prob)
+        risk_result = model_predict_risk(project_data)
+        risk_label = risk_result["risk_level"]
+
+        log_prediction(project_data, delay_result, project_id=project.id, company_id=company_id)
 
         completion_forecast = min(100.0, _safe_float(project.completion_percentage) + _safe_float(project.daily_progress_rate) * 7.0)
         cost_trend = min(2.0, (_safe_float(project.budget_spent) / max(_safe_float(project.budget_allocated), 1.0)))
@@ -434,6 +391,9 @@ async def get_project_predictions(project_id: int, company_id: int) -> Predictio
             delay_probability=round(delay_prob, 4),
             budget_overrun_probability=round(budget_prob, 4),
             risk_classification=risk_label,
+            delay_model_version=delay_result.get("model_version", "v0"),
+            budget_model_version=budget_result.get("model_version", "v0"),
+            risk_model_version=risk_result.get("model_version", "v0"),
             estimated_completion_date=estimated_date,
             completion_forecast=round(completion_forecast, 2),
             cost_trend=round(cost_trend, 3),
@@ -553,12 +513,46 @@ async def upload_project_document(project_id: int, company_id: int, file: Upload
 
 
 async def quick_predict(payload: QuickPredictRequest) -> QuickPredictResponse:
-    score = 0.2
-    delay_prob = min(1.0, score)
-    advisory = await ask_ai("Give advice for 20% delay risk")
+    data = extract_quickpredict_data(payload)
+
+    delay_result = model_predict_delay(data)
+    delay_prob = delay_result["delay_risk"]
+
+    budget_result = model_predict_budget(data)
+    budget_prob = budget_result["overrun_probability"]
+
+    data["_delay_prob"] = delay_prob
+    risk_result = model_predict_risk(data)
+    risk_label = risk_result["risk_level"]
+
+    key_factors = []
+    if delay_prob > 0.5:
+        key_factors.append("High delay probability")
+    if budget_prob > 0.5:
+        key_factors.append("High budget overrun risk")
+    if payload.weather_delay_days > 10:
+        key_factors.append(f"Weather delays ({payload.weather_delay_days} days)")
+    if payload.safety_incidents > 3:
+        key_factors.append(f"Safety incidents ({payload.safety_incidents})")
+    if payload.task_completion_rate < 0.5:
+        key_factors.append("Low task completion rate")
+    if not key_factors:
+        key_factors.append("Project appears on track")
+
+    advisory_prompt = (
+        f"Project: {payload.completion_percentage}% complete, "
+        f"delay probability {delay_prob:.0%}, budget overrun probability {budget_prob:.0%}, "
+        f"risk level {risk_label}. "
+        f"Factors: {', '.join(key_factors)}. "
+        "Provide concise construction advisory (2-3 sentences)."
+    )
+    advisory = await ask_ai(advisory_prompt)
+
     return QuickPredictResponse(
         delay_probability=round(delay_prob, 4),
-        risk_level="low",
+        budget_overrun_probability=round(budget_prob, 4),
+        risk_level=risk_label,
+        model_version=delay_result.get("model_version", "v0"),
         advisory=advisory,
-        key_risk_factors=["N/A"]
+        key_risk_factors=key_factors,
     )

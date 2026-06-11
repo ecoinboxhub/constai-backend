@@ -1,0 +1,21 @@
+project_name,budget_allocated,budget_spent,workforce_count,equipment_count,material_cost,completion_percentage,weather_delay_days,safety_incidents,inspection_score,task_completion_rate,daily_progress_rate,resource_availability,workforce_attendance,supply_delay_days,rainfall_mm,project_type,state,duration_days,delayed,budget_overrun_pct,risk_level,actual_completion_days
+Lagos-Ibadan Expressway Rehabilitation Phase II,2450000000,1837500000,450,38,857500000,67,12,2,78,0.72,1.8,0.68,0.75,8,145,Road,Oyo,720,1,8.3,medium,780
+Abuja Millennium Tower and Cultural Centre,780000000,624000000,320,22,296400000,80,3,1,85,0.88,2.1,0.82,0.88,4,35,Building,FCT,540,0,2.1,low,548
+Second Niger Bridge Main Bridge Works,3800000000,3420000000,680,55,1596000000,90,18,3,72,0.75,1.5,0.62,0.7,15,180,Bridge,Anambra,900,1,15.4,high,960
+Mambilla Hydropower Project Lot 1 Civil Works,4500000000,1350000000,520,65,1800000000,30,25,1,62,0.35,0.8,0.45,0.55,28,85,Dam,Taraba,1095,1,22,high,1150
+Lagos Blue Line Rail Marina to Mile 2,3200000000,2880000000,580,42,1344000000,90,8,2,80,0.85,1.9,0.78,0.82,10,190,Railway,Lagos,720,0,4.2,low,730
+Port Harcourt Refinery Rehabilitation Project,4800000000,3840000000,780,85,2112000000,80,15,5,55,0.6,1.2,0.52,0.6,22,240,Pipeline,Rivers,540,1,28.5,high,620
+Kashimbilla Dam and Water Supply Project,950000000,807500000,210,25,380000000,85,6,0,82,0.82,1.7,0.74,0.8,5,65,Dam,Taraba,365,0,5.8,low,370
+Abuja-Kaduna Dual Carriageway Phase II,1850000000,1295000000,380,30,647500000,70,4,1,75,0.68,1.6,0.66,0.72,6,35,Road,Kaduna,540,0,3.5,low,555
+Benin-Warri Expressway Dualisation Project,2100000000,1260000000,340,28,756000000,60,14,3,65,0.55,1.3,0.55,0.62,12,175,Road,Edo,630,1,12,medium,680
+Lekki Deep Sea Port Phase I,4900000000,4655000000,850,72,2205000000,95,10,4,74,0.78,2.0,0.72,0.78,14,200,Building,Lagos,840,1,18.7,medium,880
+Enugu International Conference Centre,420000000,336000000,180,14,159600000,80,7,0,88,0.9,2.3,0.85,0.9,3,110,Building,Enugu,300,0,0,low,295
+Katsina Wind Power Project,1600000000,1040000000,150,20,560000000,65,2,0,79,0.7,1.8,0.7,0.76,18,8,PowerPlant,Katsina,450,1,6.2,medium,490
+East-West Road Section IV Oron-Eket,1750000000,787500000,290,24,525000000,45,16,2,60,0.42,1.0,0.5,0.58,20,260,Road,Akwa_Ibom,540,1,25,high,600
+Abuja Light Rail Lot 1A,1200000000,1080000000,260,22,468000000,90,2,1,84,0.87,2.2,0.8,0.86,5,30,Railway,FCT,365,0,1.8,low,360
+Ajaokuta Steel Plant Rehabilitation,3500000000,2100000000,620,58,1400000000,60,5,3,58,0.52,1.1,0.48,0.56,35,55,Building,Kogi,720,1,35,high,800
+Lagos-Calabar Coastal Highway Pilot Phase,2800000000,1120000000,410,35,980000000,40,20,2,68,0.45,1.1,0.54,0.63,16,210,Road,Lagos,600,1,14.5,high,660
+Asaba-Benin Expressway Section A,1680000000,1428000000,310,26,604800000,85,11,1,76,0.74,1.7,0.71,0.74,7,165,Road,Delta,480,0,2.8,low,490
+Zungeru Hydroelectric Dam Phase I,2600000000,2340000000,460,50,1144000000,90,8,2,77,0.8,1.6,0.69,0.73,12,70,Dam,Niger,630,0,4.5,low,640
+Bonny Island Pipeline Expansion,2200000000,1650000000,350,32,880000000,75,17,4,63,0.58,1.4,0.56,0.61,14,250,Pipeline,Rivers,450,1,16.8,high,520
+Onitsha Inland Port Development,1400000000,980000000,280,20,504000000,70,13,1,70,0.62,1.5,0.6,0.68,11,155,Building,Anambra,480,1,11.2,medium,520

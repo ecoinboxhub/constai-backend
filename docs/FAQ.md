@@ -169,7 +169,7 @@ We use direct bcrypt library with manual truncation: `password.encode('utf-8')[:
 We extract it from token claims: `payload.get("company_id", 1)` with default of 1 for MVP.
 
 ### How do you handle CORS?
-CORS middleware with allowed origins: localhost:3000, localhost:5173, *.netlify.app.
+CORS middleware with allowed origins: localhost:3000, localhost:5173, constai-frontend.vercel.app.
 
 ### How do you handle rate limiting?
 SlowAPI with 100 requests per minute per IP. Configurable per endpoint.

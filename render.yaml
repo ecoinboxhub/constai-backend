@@ -39,3 +39,11 @@ services:
         sync: false
       - key: CHROMA_PERSIST_DIR
         value: "/var/data/vector_indexes"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: HUGGINGFACE_API_KEY
+        sync: false
+      - key: HUGGINGFACEHUB_API_TOKEN
+        sync: false
+      - key: API_KEY
+        sync: false

@@ -43,4 +43,7 @@ def build_api_router() -> APIRouter:
 	from app.modules.notifications.router import router as notifications_router
 	api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 
+	from app.modules.ml.router import router as ml_router
+	api_router.include_router(ml_router, prefix="/ml", tags=["ml"])
+
 	return api_router

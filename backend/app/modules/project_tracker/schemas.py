@@ -89,6 +89,9 @@ class PredictionResponse(BaseModel):
     delay_probability: float
     budget_overrun_probability: float
     risk_classification: str
+    delay_model_version: str = "v0"
+    budget_model_version: str = "v0"
+    risk_model_version: str = "v0"
     estimated_completion_date: Optional[date]
     completion_forecast: float
     cost_trend: float
@@ -149,6 +152,8 @@ class QuickPredictRequest(BaseModel):
 
 class QuickPredictResponse(BaseModel):
     delay_probability: float
+    budget_overrun_probability: float = 0.0
     risk_level: str
+    model_version: str = "v0"
     advisory: str
     key_risk_factors: List[str]

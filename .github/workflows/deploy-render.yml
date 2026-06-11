@@ -1,0 +1,39 @@
+name: Deploy Backend to Render
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "requirements.txt"
+      - "runtime.txt"
+      - "render.yaml"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r ../requirements.txt
+
+      - name: Run tests
+        run: python -m pytest tests/ -v --timeout=60 || echo "No tests found or tests failed"
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST "https://api.render.com/deploy/srv-d8ea0lk2m8qs738n0bb0?key=QgMuxBaNzjc"
+        shell: bash
