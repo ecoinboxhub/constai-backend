@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Header
 from pydantic import BaseModel, EmailStr, Field
 from app.modules.auth.schemas import Token, UserCreate, UserLogin, UserResponse, SocialSyncCreate, OTPRequest, OTPVerify, PasswordResetRequest, PasswordReset, ChangePassword
-from app.modules.auth.service import authenticate_user, create_tokens, register_user, request_otp_service, verify_otp_service, request_password_reset, reset_password, change_password, setup_initial_admin
+from app.modules.auth.service import authenticate_user, create_tokens, register_user, request_otp_service, verify_otp_service, request_password_reset, reset_password, change_password, setup_initial_admin, admin_reset_password
 from app.core.security import bearer, refresh_access_token, decode_token
 from fastapi.security import HTTPAuthorizationCredentials
-from typing import Annotated
+from typing import Annotated, Optional
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -75,6 +76,18 @@ def request_password_reset_endpoint(req: PasswordResetRequest):
 @router.post("/reset-password")
 def reset_password_endpoint(req: PasswordReset):
     return reset_password(req.token, req.new_password)
+
+
+class AdminPasswordReset(BaseModel):
+    email: EmailStr
+    new_password: str = Field(min_length=8)
+
+
+@router.post("/admin-reset-password")
+def admin_reset_password_endpoint(req: AdminPasswordReset, x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
+    if not x_api_key or x_api_key != settings.api_key:
+        raise HTTPException(status_code=401, detail="Valid X-API-Key header required.")
+    return admin_reset_password(req.email, req.new_password)
 
 
 @router.post("/change-password")

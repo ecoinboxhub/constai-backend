@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.db.models.core import User, Company
+from app.db.models.core import User, Company, PasswordResetToken
 from app.modules.auth.schemas import Token, UserCreate
 from app.core.security import get_password_hash, verify_password, create_access_token, create_refresh_token
 
@@ -161,15 +161,13 @@ def setup_initial_admin(email: str, password: str, company_name: str) -> dict:
 
 
 def request_password_reset(email: str) -> dict:
+    import secrets
+    from datetime import timedelta
     session: Session = SessionLocal()
     try:
         user = session.query(User).filter(User.username == email.lower()).first()
         if not user:
             return {"message": "If that email is registered, a reset link will be sent."}
-
-        import secrets
-        from datetime import timedelta
-        from app.db.models.core import PasswordResetToken
 
         session.query(PasswordResetToken).filter(
             PasswordResetToken.user_id == user.id,
@@ -200,8 +198,6 @@ def request_password_reset(email: str) -> dict:
 def reset_password(token: str, new_password: str) -> dict:
     session: Session = SessionLocal()
     try:
-        from app.db.models.core import PasswordResetToken
-
         now = datetime.now(UTC)
         reset = session.query(PasswordResetToken).filter(
             PasswordResetToken.token == token,
@@ -230,7 +226,29 @@ def reset_password(token: str, new_password: str) -> dict:
     except Exception as e:
         session.rollback()
         logger.error(f"Error in reset_password: {e}")
-        raise HTTPException(status_code=500, detail="Failed to reset password.")
+        raise HTTPException(status_code=500, detail=f"Failed to reset password: {str(e)}")
+    finally:
+        session.close()
+
+
+def admin_reset_password(email: str, new_password: str) -> dict:
+    session: Session = SessionLocal()
+    try:
+        user = session.query(User).filter(User.username == email.lower()).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        user.hashed_password = get_password_hash(new_password)
+        session.commit()
+
+        return {"message": f"Password reset successfully for {email}."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error in admin_reset_password: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to reset password: {str(e)}")
     finally:
         session.close()
 
