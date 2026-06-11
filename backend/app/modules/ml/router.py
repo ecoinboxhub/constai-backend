@@ -146,9 +146,7 @@ async def model_health(auth: dict = Depends(_verify_ml_access)):
 async def train_models(auth: dict = Depends(_verify_ml_access)):
     scripts = [
         ("Generate Dataset", "data/generate_dataset.py"),
-        ("Delay Model", "scripts/train_delay_model.py"),
-        ("Budget Model", "scripts/train_budget_model.py"),
-        ("Risk Model", "scripts/train_risk_model.py"),
+        ("Fast Train All Models", "scripts/train_fast.py"),
     ]
 
     results = []
