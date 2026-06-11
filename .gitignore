@@ -29,6 +29,8 @@ Thumbs.db
 
 # Logs and reports
 *.log
+train_out.txt
+train_err.txt
 coverage.xml
 htmlcov/
 .pytest_cache/
