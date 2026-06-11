@@ -7,7 +7,7 @@ from typing import Optional
 
 import joblib
 import pandas as pd
-from fastapi import APIRouter, Query, Depends, HTTPException, Header
+from fastapi import APIRouter, Query, Depends, HTTPException, Header, UploadFile, File
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -275,6 +275,26 @@ async def update_model_config(config: dict, auth: dict = Depends(_verify_ml_acce
             errors.append({name: str(exc)})
     from app.services.model_service import get_active_models_config
     return {"status": "updated", "model_config": get_active_models_config(), "errors": errors}
+
+
+@router.post("/upload-model")
+async def upload_model(
+    model_name: str = Query(..., description="Model name (e.g. delay_model, budget_model, risk_classifier)"),
+    file: UploadFile = File(...),
+    auth: dict = Depends(_verify_ml_access),
+):
+    """Upload a trained model .pkl file to artifacts/models/."""
+    model_dir = BACKEND_DIR / "artifacts" / "models"
+    model_dir.mkdir(parents=True, exist_ok=True)
+    content = await file.read()
+    path = model_dir / f"{model_name}.pkl"
+    with open(path, "wb") as f:
+        f.write(content)
+    from app.services.model_service import _MODELS, _META_CACHE, _LOAD_TIMES
+    _MODELS.pop(model_name, None)
+    _META_CACHE.pop(model_name, None)
+    _LOAD_TIMES.pop(model_name, None)
+    return {"status": "uploaded", "path": str(path)}
 
 
 @router.get("/stats")
