@@ -83,7 +83,11 @@ def log_to_mlflow(experiment_name, model, run_name, params, metrics, extra_dicts
 
 
 def try_optuna_classifier(X_train, y_train, X_test, y_test, model_type, n_trials=20):
-    import optuna
+    try:
+        import optuna
+    except ImportError:
+        logger.warning("optuna not installed, skipping Optuna tuning for classifier")
+        return None, None
     from sklearn.metrics import f1_score
 
     n_unique = len(set(y_train))
@@ -163,7 +167,11 @@ def try_optuna_classifier(X_train, y_train, X_test, y_test, model_type, n_trials
 
 
 def try_optuna_regressor(X_train, y_train, X_test, y_test, model_type, n_trials=20):
-    import optuna
+    try:
+        import optuna
+    except ImportError:
+        logger.warning("optuna not installed, skipping Optuna tuning for regressor")
+        return None, None
     from sklearn.metrics import r2_score
 
     def objective(trial):
