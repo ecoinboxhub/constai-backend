@@ -15,7 +15,11 @@ bearer = HTTPBearer(auto_error=False)
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     if hashed_password.startswith("sha256$"):
         import hashlib
-        expected = hashed_password.split("$", 1)[1]
+        parts = hashed_password.split("$")
+        if len(parts) == 3:
+            salt, expected = parts[1], parts[2]
+            return hashlib.sha256((salt + plain_password).encode()).hexdigest() == expected
+        expected = parts[1]
         return hashlib.sha256(plain_password.encode()).hexdigest() == expected
     return pwd_context.verify(plain_password, hashed_password)
 
