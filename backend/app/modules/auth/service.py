@@ -105,6 +105,164 @@ def create_tokens(user_id: str, role: str, company_id: Optional[int] = None) -> 
     return Token(access_token=access, refresh_token=refresh)
 
 
+def setup_initial_admin(email: str, password: str, company_name: str) -> dict:
+    session: Session = SessionLocal()
+    try:
+        from app.db.models.core import Company, User
+
+        user_count = session.query(User).count()
+        if user_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Initial admin already exists. Use /auth/register instead."
+            )
+
+        company = session.query(Company).first()
+        if not company:
+            company = Company(
+                name=company_name,
+                industry="Construction",
+                base_currency="NGN",
+                contact_email=email
+            )
+            session.add(company)
+            session.flush()
+            company_id_for_user = company.id
+        else:
+            company_id_for_user = company.id
+
+        user = User(
+            username=email.strip().lower(),
+            hashed_password=get_password_hash(password),
+            role="admin",
+            company_id=company_id_for_user,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        return {
+            "id": str(user.id),
+            "email": user.username,
+            "username": user.username,
+            "role": user.role,
+            "company_id": user.company_id,
+            "is_active": True,
+            "message": "Initial admin user created successfully."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error in setup_initial_admin: {e}")
+        raise HTTPException(status_code=500, detail=f"Setup failed: {str(e)}")
+    finally:
+        session.close()
+
+
+def request_password_reset(email: str) -> dict:
+    session: Session = SessionLocal()
+    try:
+        user = session.query(User).filter(User.username == email.lower()).first()
+        if not user:
+            return {"message": "If that email is registered, a reset link will be sent."}
+
+        import secrets
+        from datetime import timedelta
+        from app.db.models.core import PasswordResetToken
+
+        session.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.is_used == False
+        ).update({"is_used": True})
+
+        token = secrets.token_urlsafe(32)
+        expires = datetime.now(UTC) + timedelta(hours=1)
+
+        reset = PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=expires,
+        )
+        session.add(reset)
+        session.commit()
+
+        return {"token": token, "message": "Password reset token generated."}
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error in request_password_reset: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process password reset request.")
+    finally:
+        session.close()
+
+
+def reset_password(token: str, new_password: str) -> dict:
+    session: Session = SessionLocal()
+    try:
+        from app.db.models.core import PasswordResetToken
+
+        now = datetime.now(UTC)
+        reset = session.query(PasswordResetToken).filter(
+            PasswordResetToken.token == token,
+            PasswordResetToken.is_used == False,
+            PasswordResetToken.expires_at > now
+        ).first()
+
+        if not reset:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset token."
+            )
+
+        user = session.query(User).filter(User.id == reset.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        user.hashed_password = get_password_hash(new_password)
+        reset.is_used = True
+        session.commit()
+
+        return {"message": "Password reset successful."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error in reset_password: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset password.")
+    finally:
+        session.close()
+
+
+def change_password(user_id: int, current_password: str, new_password: str) -> dict:
+    session: Session = SessionLocal()
+    try:
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        if not verify_password(current_password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password is incorrect."
+            )
+
+        user.hashed_password = get_password_hash(new_password)
+        session.commit()
+
+        return {"message": "Password changed successfully."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error in change_password: {e}")
+        raise HTTPException(status_code=500, detail="Failed to change password.")
+    finally:
+        session.close()
+
+
 async def request_otp_service(phone_number: str) -> bool:
     import random
     from datetime import timedelta

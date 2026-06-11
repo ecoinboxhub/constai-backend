@@ -126,6 +126,7 @@ def init_db() -> None:
                 from app.db.seeds import seed_erp_data
                 seed_erp_data(company_id=default_company_id)
                 logger.info("Project seeding complete.")
+
         finally:
             db.close()
     except Exception as exc:

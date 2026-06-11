@@ -1,11 +1,23 @@
 from fastapi import APIRouter, HTTPException, status, Depends
-from app.modules.auth.schemas import Token, UserCreate, UserLogin, UserResponse, SocialSyncCreate, OTPRequest, OTPVerify
-from app.modules.auth.service import authenticate_user, create_tokens, register_user, request_otp_service, verify_otp_service
-from app.core.security import bearer, refresh_access_token
+from pydantic import BaseModel, EmailStr, Field
+from app.modules.auth.schemas import Token, UserCreate, UserLogin, UserResponse, SocialSyncCreate, OTPRequest, OTPVerify, PasswordResetRequest, PasswordReset, ChangePassword
+from app.modules.auth.service import authenticate_user, create_tokens, register_user, request_otp_service, verify_otp_service, request_password_reset, reset_password, change_password, setup_initial_admin
+from app.core.security import bearer, refresh_access_token, decode_token
 from fastapi.security import HTTPAuthorizationCredentials
 from typing import Annotated
 
 router = APIRouter()
+
+class InitialAdminSetup(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    company_name: str
+
+
+@router.post("/setup-initial-admin")
+def setup_initial_admin_endpoint(req: InitialAdminSetup):
+    return setup_initial_admin(req.email, req.password, req.company_name)
+
 
 @router.post("/register", response_model=UserResponse)
 def register(user_in: UserCreate):
@@ -53,3 +65,18 @@ async def verify_otp(otp_in: OTPVerify):
         role=user_payload["role"],
         company_id=user_payload.get("company_id")
     )
+
+
+@router.post("/request-password-reset")
+def request_password_reset_endpoint(req: PasswordResetRequest):
+    return request_password_reset(req.email)
+
+
+@router.post("/reset-password")
+def reset_password_endpoint(req: PasswordReset):
+    return reset_password(req.token, req.new_password)
+
+
+@router.post("/change-password")
+def change_password_endpoint(req: ChangePassword, token: dict = Depends(decode_token)):
+    return change_password(int(token["sub"]), req.current_password, req.new_password)
