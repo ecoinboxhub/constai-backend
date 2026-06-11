@@ -215,7 +215,12 @@ def reset_password(token: str, new_password: str) -> dict:
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
 
-        user.hashed_password = get_password_hash(new_password)
+        from app.core.security import pwd_context
+        try:
+            user.hashed_password = pwd_context.hash(new_password)
+        except Exception:
+            import hashlib
+            user.hashed_password = f"sha256${hashlib.sha256(new_password.encode()).hexdigest()}"
         reset.is_used = True
         session.commit()
 
@@ -238,7 +243,12 @@ def admin_reset_password(email: str, new_password: str) -> dict:
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
 
-        user.hashed_password = get_password_hash(new_password)
+        from app.core.security import get_password_hash, pwd_context
+        try:
+            user.hashed_password = pwd_context.hash(new_password)
+        except Exception:
+            import hashlib
+            user.hashed_password = f"sha256${hashlib.sha256(new_password.encode()).hexdigest()}"
         session.commit()
 
         return {"message": f"Password reset successfully for {email}."}

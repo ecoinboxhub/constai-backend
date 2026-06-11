@@ -272,9 +272,7 @@ class PasswordResetToken(Base, TimestampMixin):
     __tablename__ = "password_reset_tokens"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     is_used: Mapped[bool] = mapped_column(default=False)
-
-    user: Mapped["User"] = relationship("User")
