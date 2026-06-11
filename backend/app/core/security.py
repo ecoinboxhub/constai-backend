@@ -6,32 +6,25 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from app.core.config import settings
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer = HTTPBearer(auto_error=False)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    import hashlib
     if hashed_password.startswith("sha256$"):
-        import hashlib
         parts = hashed_password.split("$")
         if len(parts) >= 3:
             salt = parts[1]
             expected = parts[2]
             return hashlib.sha256((salt + plain_password).encode()).hexdigest() == expected
-        return False
-    return pwd_context.verify(plain_password, hashed_password)
+    return False
 
 
 def get_password_hash(password: str) -> str:
     import hashlib, secrets
-    try:
-        return pwd_context.hash(password)
-    except Exception:
-        salt = secrets.token_hex(16)
-        hashed = hashlib.sha256((salt + password).encode()).hexdigest()
-        return f"sha256${salt}${hashed}"
+    salt = secrets.token_hex(16)
+    hashed = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"sha256${salt}${hashed}"
 
 
 def create_access_token(subject: str, role: str, company_id: Optional[int] = None) -> str:

@@ -244,7 +244,7 @@ def admin_reset_password(email: str, new_password: str) -> dict:
         user.hashed_password = f"sha256${salt}${h}"
         session.commit()
 
-        return {"message": f"Password reset successfully for {email}."}
+        return {"message": f"Password reset successfully for {email}.", "hash_method": "sha256", "nonce": "v2"}
 
     except HTTPException:
         raise
