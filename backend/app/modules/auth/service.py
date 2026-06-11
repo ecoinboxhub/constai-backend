@@ -215,10 +215,7 @@ def reset_password(token: str, new_password: str) -> dict:
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
 
-        import hashlib, secrets
-        salt = secrets.token_hex(16)
-        hashed = hashlib.sha256((salt + new_password).encode()).hexdigest()
-        user.hashed_password = f"sha256${salt}${hashed}"
+        user.hashed_password = get_password_hash(new_password)
         reset.is_used = True
         session.commit()
 
@@ -235,16 +232,13 @@ def reset_password(token: str, new_password: str) -> dict:
 
 
 def admin_reset_password(email: str, new_password: str) -> dict:
-    import hashlib, secrets
     session: Session = SessionLocal()
     try:
         user = session.query(User).filter(User.username == email.lower()).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
 
-        salt = secrets.token_hex(16)
-        hashed = hashlib.sha256((salt + new_password).encode()).hexdigest()
-        user.hashed_password = f"sha256${salt}${hashed}"
+        user.hashed_password = get_password_hash(new_password)
         session.commit()
 
         return {"message": f"Password reset successfully for {email}."}
