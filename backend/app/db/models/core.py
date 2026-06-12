@@ -276,3 +276,13 @@ class PasswordResetToken(Base, TimestampMixin):
     token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     is_used: Mapped[bool] = mapped_column(default=False)
+
+
+class ModelArtifact(Base, TimestampMixin):
+    __tablename__ = "model_artifacts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    data: Mapped[str] = mapped_column(Text)  # base64-encoded model binary
+    meta: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON metadata
+    version: Mapped[str] = mapped_column(String(50), default="v1.0")

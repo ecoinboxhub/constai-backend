@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 from datetime import UTC, datetime
@@ -114,6 +115,58 @@ def _model_path(name: str) -> Path:
     return base
 
 
+def _restore_model_from_db(name: str) -> bool:
+    """Restore model files from the ModelArtifact DB table if they don't exist on disk."""
+    try:
+        from app.db.session import SessionLocal
+        from app.db.models.core import ModelArtifact
+        db = SessionLocal()
+        try:
+            artifact = db.query(ModelArtifact).filter(ModelArtifact.name == name).first()
+            if artifact is None:
+                return False
+            model_dir = _models_dir()
+            model_dir.mkdir(parents=True, exist_ok=True)
+            pkl_path = model_dir / f"{name}.pkl"
+            with open(pkl_path, "wb") as f:
+                f.write(base64.b64decode(artifact.data))
+            if artifact.meta:
+                meta_path = model_dir / f"{name}_meta.json"
+                with open(meta_path, "w") as f:
+                    f.write(artifact.meta)
+            logger.info(f"Restored model '{name}' from database to {pkl_path}")
+            return True
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning(f"Failed to restore model '{name}' from DB: {exc}")
+        return False
+
+
+def _save_model_to_db(name: str, data: bytes, meta_json: Optional[str] = None) -> None:
+    """Persist model binary to the ModelArtifact DB table so it survives redeploys."""
+    try:
+        from app.db.session import SessionLocal
+        from app.db.models.core import ModelArtifact
+        db = SessionLocal()
+        try:
+            artifact = db.query(ModelArtifact).filter(ModelArtifact.name == name).first()
+            b64_data = base64.b64encode(data).decode("ascii")
+            if artifact:
+                artifact.data = b64_data
+                if meta_json:
+                    artifact.meta = meta_json
+            else:
+                artifact = ModelArtifact(name=name, data=b64_data, meta=meta_json)
+                db.add(artifact)
+            db.commit()
+            logger.info(f"Saved model '{name}' to database ({len(data)} bytes)")
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning(f"Failed to save model '{name}' to DB: {exc}")
+
+
 def _load_model(name: str) -> Any:
     path = _model_path(name)
     meta = _meta_path(name)
@@ -125,10 +178,19 @@ def _load_model(name: str) -> Any:
             return _MODELS[name]
 
     if not path.exists():
-        logger.warning(f"Model file not found: {path}")
-        _MODELS[name] = None
-        _META_CACHE[name] = {}
-        return None
+        logger.warning(f"Model file not found: {path}, trying DB restore...")
+        if _restore_model_from_db(name):
+            # retry after restore
+            if path.exists():
+                logger.info(f"Model '{name}' restored from DB, loading...")
+            else:
+                _MODELS[name] = None
+                _META_CACHE[name] = {}
+                return None
+        else:
+            _MODELS[name] = None
+            _META_CACHE[name] = {}
+            return None
 
     try:
         model = joblib.load(path)

@@ -281,17 +281,23 @@ async def upload_model(
     file: UploadFile = File(...),
     auth: dict = Depends(_verify_ml_access),
 ):
-    """Upload a trained model .pkl file to artifacts/models/."""
+    """Upload a trained model .pkl file to artifacts/models/ and persist to DB."""
     model_dir = BACKEND_DIR / "artifacts" / "models"
     model_dir.mkdir(parents=True, exist_ok=True)
     content = await file.read()
     path = model_dir / f"{model_name}.pkl"
     with open(path, "wb") as f:
         f.write(content)
-    from app.services.model_service import _MODELS, _META_CACHE, _LOAD_TIMES
+    from app.services.model_service import _MODELS, _META_CACHE, _LOAD_TIMES, _save_model_to_db
     _MODELS.pop(model_name, None)
     _META_CACHE.pop(model_name, None)
     _LOAD_TIMES.pop(model_name, None)
+    # Persist to DB so model survives redeploy
+    meta_path = model_dir / f"{model_name}_meta.json"
+    meta_json = None
+    if meta_path.exists():
+        meta_json = meta_path.read_text()
+    _save_model_to_db(model_name, content, meta_json)
     return {"status": "uploaded", "path": str(path)}
 
 
