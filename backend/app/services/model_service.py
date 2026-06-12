@@ -335,8 +335,11 @@ def predict_risk(data: dict) -> dict:
             le = joblib.load(le_path)
             label = le.inverse_transform([int(np.argmax(probs))])[0]
         else:
-            label = str(classes[int(np.argmax(probs))])
-        prob_dist = {str(c): float(p) for c, p in zip(classes, probs)}
+            idx = int(np.argmax(probs))
+            label_map = {0: "low", 1: "medium", 2: "high"}
+            label = label_map.get(idx, label_map.get(classes[idx] if idx < len(classes) else 1, "medium"))
+        label_map = {0: "low", 1: "medium", 2: "high"}
+        prob_dist = {label_map.get(int(c), str(c)): float(p) for c, p in zip(classes, probs)}
     except Exception as exc:
         logger.warning(f"Risk model prediction failed: {exc}")
         delay_prob = data.get("_delay_prob", 0.0)
