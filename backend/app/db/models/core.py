@@ -286,3 +286,34 @@ class ModelArtifact(Base, TimestampMixin):
     data: Mapped[str] = mapped_column(Text)  # base64-encoded model binary
     meta: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON metadata
     version: Mapped[str] = mapped_column(String(50), default="v1.0")
+
+
+class BlogArticle(Base, TimestampMixin):
+    __tablename__ = "blog_articles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), index=True)
+    slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str] = mapped_column(Text)
+    author: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    cover_image: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    tags: Mapped[str | None] = mapped_column(String(512), nullable=True)  # comma-separated
+    published: Mapped[bool] = mapped_column(default=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NewsArticle(Base, TimestampMixin):
+    __tablename__ = "news_articles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), index=True)
+    slug: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    excerpt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str] = mapped_column(Text)
+    source: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    cover_image: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    published: Mapped[bool] = mapped_column(default=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

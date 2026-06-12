@@ -46,4 +46,10 @@ def build_api_router() -> APIRouter:
 	from app.modules.ml.router import router as ml_router
 	api_router.include_router(ml_router, prefix="/ml", tags=["ml"])
 
+	from app.modules.blog.router import router as blog_router
+	api_router.include_router(blog_router, prefix="/blog", tags=["blog"])
+
+	from app.modules.news.router import router as news_router
+	api_router.include_router(news_router, prefix="/news", tags=["news"])
+
 	return api_router
