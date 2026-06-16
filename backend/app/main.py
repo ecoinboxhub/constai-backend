@@ -182,7 +182,7 @@ def health_check():
     return {
         "name": "ConstAI",
         "tagline": "Building Africa's Future with Predictive Construction Intelligence",
-        "status": "operational",
+        "status": "ok",
         "version": "0.1.0",
         "memory_mb": round(mem_mb, 2) if mem_mb else None,
         "region": "Nigeria & Africa",
