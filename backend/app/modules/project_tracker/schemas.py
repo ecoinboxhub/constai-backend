@@ -113,6 +113,7 @@ class DelayPredictionResponse(BaseModel):
 
 class AIChatRequest(BaseModel):
     message: str
+    project_id: Optional[int] = None
 
 class AIChatResponse(BaseModel):
     response: str

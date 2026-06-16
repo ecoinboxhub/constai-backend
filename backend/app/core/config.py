@@ -51,6 +51,8 @@ class Settings(BaseSettings):
         Path(__file__).resolve().parents[2] / "artifacts" / "models"
     )
 
+    firebase_credentials_path: str = str(BACKEND_DIR / "secrets" / "constai-firebase-service-account.json")
+
     user_agent: str = "NigeriaConstructionAI/1.0"
 
     model_config = SettingsConfigDict(

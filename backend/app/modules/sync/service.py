@@ -25,31 +25,35 @@ def reconcile_client_item(
         payload["company_id"] = company_id
 
         if table_name == "projects":
-            # Map client projects to PostgreSQL core entity
-            project_id = payload.get("id")
+            client_uuid = payload.get("client_uuid")
             existing_project = None
-            if project_id:
+
+            if client_uuid:
                 existing_project = db.query(Project).filter(
-                    Project.id == int(project_id),
+                    Project.client_uuid == client_uuid,
                     Project.company_id == company_id
                 ).first()
+            else:
+                project_id = payload.get("id")
+                if project_id:
+                    existing_project = db.query(Project).filter(
+                        Project.id == int(project_id),
+                        Project.company_id == company_id
+                    ).first()
 
             if action in ("INSERT", "UPDATE"):
-                # Clean client payload mapping of read-only timestamps or custom offline properties
                 clean_data = {
                     k: v for k, v in payload.items() 
                     if k in Project.__table__.columns.keys() and k not in ("id", "created_at", "updated_at")
                 }
                 
                 if existing_project:
-                    # Update existing record (Last Write Wins)
                     for key, val in clean_data.items():
                         setattr(existing_project, key, val)
                     db.flush()
                     db.refresh(existing_project)
                     result = existing_project
                 else:
-                    # Create new record
                     new_project = Project(**clean_data)
                     db.add(new_project)
                     db.flush()
@@ -59,20 +63,29 @@ def reconcile_client_item(
                 return {"id": result.id, "status": "synced"}
 
             elif action == "DELETE":
+                lookup_id = client_uuid or payload.get("id")
                 if existing_project:
                     db.delete(existing_project)
                     db.flush()
-                    return {"id": project_id, "status": "deleted"}
-                return {"id": project_id, "status": "not_found"}
+                    return {"id": lookup_id, "status": "deleted"}
+                return {"id": lookup_id, "status": "not_found"}
 
         elif table_name == "workforce":
-            worker_id = payload.get("id")
+            client_uuid = payload.get("client_uuid")
             existing_worker = None
-            if worker_id:
+
+            if client_uuid:
                 existing_worker = db.query(Workforce).filter(
-                    Workforce.id == int(worker_id),
+                    Workforce.client_uuid == client_uuid,
                     Workforce.company_id == company_id
                 ).first()
+            else:
+                worker_id = payload.get("id")
+                if worker_id:
+                    existing_worker = db.query(Workforce).filter(
+                        Workforce.id == int(worker_id),
+                        Workforce.company_id == company_id
+                    ).first()
 
             if action in ("INSERT", "UPDATE"):
                 clean_data = {
@@ -80,7 +93,6 @@ def reconcile_client_item(
                     if k in Workforce.__table__.columns.keys() and k not in ("id", "created_at", "updated_at")
                 }
                 
-                # Check project mapping
                 pid = clean_data.get("project_id")
                 if pid and str(pid).strip() == "":
                     clean_data["project_id"] = None
@@ -103,11 +115,12 @@ def reconcile_client_item(
                 return {"id": result.id, "status": "synced"}
 
             elif action == "DELETE":
+                lookup_id = client_uuid or payload.get("id")
                 if existing_worker:
                     db.delete(existing_worker)
                     db.flush()
-                    return {"id": worker_id, "status": "deleted"}
-                return {"id": worker_id, "status": "not_found"}
+                    return {"id": lookup_id, "status": "deleted"}
+                return {"id": lookup_id, "status": "not_found"}
 
         elif table_name == "inspections" or table_name == "safety_findings":
             # Map inspections logs to SafetyFinding Postgres entity
@@ -132,5 +145,4 @@ def reconcile_client_item(
 
     except Exception as err:
         logger.error(f"Error during single item reconciliation on table {table_name}: {err}")
-        db.rollback()
         raise HTTPException(status_code=400, detail=f"Reconciliation error: {str(err)}")

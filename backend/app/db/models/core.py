@@ -58,6 +58,7 @@ class Project(Base, TimestampMixin):
     __tablename__ = "projects"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(255), index=True)
     contractor_name: Mapped[str] = mapped_column(String(255), nullable=False)
     location: Mapped[str] = mapped_column(String(120), index=True)
@@ -91,6 +92,7 @@ class Workforce(Base, TimestampMixin):
     __tablename__ = "workforce"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     first_name: Mapped[str] = mapped_column(String(120))
     last_name: Mapped[str] = mapped_column(String(120))
     role: Mapped[str] = mapped_column(String(120), index=True)

@@ -1,6 +1,7 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
+from app.core.security import decode_token
 
 router = APIRouter()
 
@@ -28,6 +29,13 @@ def create_log(log: LogCreate):
 @router.get("")
 def get_logs():
     return []
+
+
+@router.post("/error")
+def log_client_error(payload: dict, token: dict = Depends(decode_token)):
+    import logging
+    logging.getLogger(__name__).error(f"Client error: {payload.get('type')} - {payload.get('message')}")
+    return {"status": "logged"}
 
 
 @router.post("/mobile-telemetry")
