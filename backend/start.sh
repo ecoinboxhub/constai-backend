@@ -1,8 +1,9 @@
 #!/bin/bash
 # Run database migrations directly via SQL to ensure client_uuid columns exist
+cd "$(dirname "$0")"
 python -c "
 import os, sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.getcwd())
 from app.core.config import settings
 from sqlalchemy import create_engine, text
 

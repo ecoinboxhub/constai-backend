@@ -92,6 +92,22 @@ def ensure_db_initialized():
         logger.warning(f"Database initialization failed: {exc}")
         logger.info("Application will continue without database persistence.")
 
+    try:
+        from sqlalchemy import create_engine, text
+        from app.db.session import get_engine
+        engine = get_engine()
+        with engine.connect() as conn:
+            for table, col in [('projects','client_uuid'),('project_documents','client_uuid'),('workforce','client_uuid')]:
+                try:
+                    conn.execute(text('ALTER TABLE %s ADD COLUMN %s VARCHAR(64)' % (table, col)))
+                    conn.commit()
+                    logger.info("Migration: added %s to %s" % (col, table))
+                except Exception as e:
+                    conn.rollback()
+                    logger.info("Migration: %s.%s - %s" % (table, col, str(e).split(chr(10))[0]))
+    except Exception as exc:
+        logger.warning(f"Migration check failed: {exc}")
+
 
 app = FastAPI(
     title=settings.app_name,
