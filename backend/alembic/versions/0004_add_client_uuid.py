@@ -1,4 +1,4 @@
-"""Add client_uuid column to projects and project_documents
+"""Add client_uuid column to projects, project_documents, and workforce
 
 Revision ID: 0004_add_client_uuid
 Revises: 0003_add_phone_number_to_users
@@ -18,8 +18,10 @@ depends_on = None
 def upgrade() -> None:
     op.add_column('projects', sa.Column('client_uuid', sa.String(length=64), nullable=True, index=True))
     op.add_column('project_documents', sa.Column('client_uuid', sa.String(length=64), nullable=True, index=True))
+    op.add_column('workforce', sa.Column('client_uuid', sa.String(length=64), nullable=True, index=True))
 
 
 def downgrade() -> None:
     op.drop_column('projects', 'client_uuid')
     op.drop_column('project_documents', 'client_uuid')
+    op.drop_column('workforce', 'client_uuid')
