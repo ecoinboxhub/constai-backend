@@ -407,8 +407,12 @@ async def chat_insight(payload: AIChatRequest, company_id: int) -> AIChatRespons
     if payload.project_id:
         project = get_project_by_id(payload.project_id, company_id)
         if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-        summary = f"Project '{project.name}' (ID: {project.id}) at {project.location}. Status: {project.project_status}, Completion: {project.completion_percentage}%, Budget: NGN{project.budget_allocated:,.0f}"
+            projects = list_projects(company_id)
+            summary = f"Portfolio for Org {company_id} has {len(projects)} projects."
+            project_context_data["project_count"] = len(projects)
+            payload.project_id = None
+        else:
+            summary = f"Project '{project.name}' (ID: {project.id}) at {project.location}. Status: {project.project_status}, Completion: {project.completion_percentage}%, Budget: NGN{project.budget_allocated:,.0f}"
         project_context_data["project_id"] = payload.project_id
         project_context_data["project_name"] = project.name
     else:
